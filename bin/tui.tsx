@@ -356,6 +356,7 @@ function TuiApp(props: { input: TuiInput; close: () => void }) {
       .filter((item) => item.session === currentSession() && item.window === currentWindow())
       .sort((a, b) => a.project.localeCompare(b.project));
   });
+  const currentRuntimeAgent = createMemo(() => currentWindowItems()[0]?.ai?.toLowerCase() || '');
 
   const shouldShowRuntimeCursor = createMemo(() => {
     if (!ENABLE_RUNTIME_CURSOR_OVERLAY) return false;
@@ -1030,16 +1031,32 @@ function TuiApp(props: { input: TuiInput; close: () => void }) {
     void props.input.onRuntimeKey(session, window, raw);
   };
 
+  const forwardCtrlVToRuntime = () => {
+    sendRawToRuntime(String.fromCharCode(22));
+  };
+
   const pasteClipboardToRuntime = async () => {
+    const canFallbackToRuntimeCtrlV = currentRuntimeAgent() === 'opencode';
+
     try {
       const text = await readTextFromClipboard();
       if (!text || text.length === 0) {
+        if (canFallbackToRuntimeCtrlV) {
+          forwardCtrlVToRuntime();
+          showClipboardToast('Forwarded Ctrl+V to runtime');
+          return;
+        }
         showClipboardToast('Clipboard is empty');
         return;
       }
       sendRawToRuntime(text);
       showClipboardToast('Pasted from clipboard');
     } catch (error) {
+      if (canFallbackToRuntimeCtrlV) {
+        forwardCtrlVToRuntime();
+        showClipboardToast('Forwarded Ctrl+V to runtime');
+        return;
+      }
       showClipboardToast(`Paste failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   };
