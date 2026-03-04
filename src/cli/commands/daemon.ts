@@ -16,12 +16,21 @@ export async function daemonCommand(action: string) {
       const result = await ensureDaemonRunning();
       if (result.alreadyRunning) {
         console.log(chalk.green(`✅ Daemon already running (port ${result.port})`));
+        if (result.backend === 'rust') {
+          console.log(chalk.gray('   Backend: rust'));
+        }
         return;
       }
       if (result.ready) {
         console.log(chalk.green(`✅ Daemon started (port ${result.port})`));
       } else {
         console.log(chalk.yellow(`⚠️  Daemon may not be ready. Check logs: ${result.logFile}`));
+      }
+      if (result.fallbackFromRust) {
+        console.log(chalk.yellow(`⚠️  Rust daemon failed, auto-fell back to TS daemon (${result.fallbackReason || 'unknown reason'}).`));
+      }
+      if (result.backend === 'rust') {
+        console.log(chalk.gray('   Backend: rust'));
       }
       break;
     }
@@ -43,6 +52,12 @@ export async function daemonCommand(action: string) {
       } else {
         console.log(chalk.yellow(`⚠️  Daemon may not be ready. Check logs: ${result.logFile}`));
       }
+      if (result.fallbackFromRust) {
+        console.log(chalk.yellow(`⚠️  Rust daemon failed, auto-fell back to TS daemon (${result.fallbackReason || 'unknown reason'}).`));
+      }
+      if (result.backend === 'rust') {
+        console.log(chalk.gray('   Backend: rust'));
+      }
       break;
     }
     case 'stop': {
@@ -62,6 +77,9 @@ export async function daemonCommand(action: string) {
       }
       console.log(chalk.gray(`   Log: ${status.logFile}`));
       console.log(chalk.gray(`   PID: ${status.pidFile}`));
+      if (status.backend === 'rust') {
+        console.log(chalk.gray('   Backend: rust'));
+      }
       break;
     }
     default:

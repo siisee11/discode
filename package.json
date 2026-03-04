@@ -25,7 +25,7 @@
     "build:release:binaries": "bun run scripts/build-binaries.ts",
     "build:release:binaries:single": "bun run scripts/build-binaries.ts --single",
     "build:release:npm": "node scripts/build-npm-package.mjs",
-    "build:release": "npm run build:release:binaries && npm run build:release:npm",
+    "build:release": "npm run build:release:binaries && npm run sidecar:package && npm run daemon-rs:package && npm run build:release:npm",
     "pack:release": "node scripts/pack-release.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -37,7 +37,8 @@
     "sidecar:package": "npm run sidecar:build && node scripts/package-sidecar-binary.mjs",
     "sidecar:bench": "node scripts/bench-sidecar-latency.mjs",
     "daemon-rs:build": "cargo build --release --manifest-path daemon-rs/Cargo.toml",
-    "daemon-rs:test": "cargo test --manifest-path daemon-rs/Cargo.toml"
+    "daemon-rs:test": "cargo test --manifest-path daemon-rs/Cargo.toml",
+    "daemon-rs:package": "npm run daemon-rs:build && node scripts/package-daemon-rs-binary.mjs"
   },
   "keywords": [
     "discord",

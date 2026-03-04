@@ -334,3 +334,43 @@ Integration tests with mocked providers:
   - channel/project edge-case handling
   - submit timing behavior by agent type and env override
   - delivery error guidance and pending fallback behavior
+
+## B6 CLI transition strategy (current implementation)
+
+Transitioned service layer:
+
+- `src/app/daemon-service.ts`
+- `src/cli/commands/daemon.ts`
+
+Feature flag for daemon backend selection:
+
+- `DISCODE_DAEMON_BACKEND=ts|rust`
+- default remains `ts` for transition safety
+
+Backend-agnostic daemon command support:
+
+- `discode daemon start`
+- `discode daemon stop`
+- `discode daemon status`
+- `discode daemon restart`
+
+All commands route through `daemon-service` and can operate against either backend.
+
+Rust-daemon fallback strategy:
+
+- when `DISCODE_DAEMON_BACKEND=rust`, service attempts Rust daemon first
+- if Rust start/ready fails, service auto-falls back to TS daemon start path
+- CLI preserves existing UX and surfaces fallback reason in output
+
+Rust daemon packaging pipeline updates:
+
+- `scripts/package-daemon-rs-binary.mjs`
+- `package.json` scripts:
+  - `daemon-rs:package`
+  - `build:release` now includes daemon-rs packaging step
+
+Validation:
+
+- `npx vitest run tests/app/daemon-service.test.ts`
+- `cargo test --manifest-path daemon-rs/Cargo.toml`
+- `npm run test:daemon-contract`

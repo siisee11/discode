@@ -229,15 +229,15 @@ Exit criteria:
 
 ### B6 - CLI Transition Strategy
 
-- [ ] keep existing CLI UX stable while switching backend daemon implementation
-- [ ] add feature flag to select TS vs Rust daemon during transition
-- [ ] make `discode daemon start|stop|status|restart` backend-agnostic
-- [ ] add fallback strategy: auto-revert to TS daemon on critical Rust daemon boot failure
-- [ ] update install/build pipeline to package Rust daemon binary
+- [x] keep existing CLI UX stable while switching backend daemon implementation (`src/cli/commands/daemon.ts`, `src/app/daemon-service.ts`)
+- [x] add feature flag to select TS vs Rust daemon during transition (`src/app/daemon-service.ts`; `DISCODE_DAEMON_BACKEND=rust|ts`)
+- [x] make `discode daemon start|stop|status|restart` backend-agnostic (`src/app/daemon-service.ts`; TS/Rust backend probing and control)
+- [x] add fallback strategy: auto-revert to TS daemon on critical Rust daemon boot failure (`src/app/daemon-service.ts`; rust-start failure fallback path)
+- [x] update install/build pipeline to package Rust daemon binary (`scripts/package-daemon-rs-binary.mjs`, `package.json` scripts)
 
 Exit criteria:
 
-- [ ] users can switch daemon backend without changing CLI workflows
+- [x] users can switch daemon backend without changing CLI workflows (`DISCODE_DAEMON_BACKEND` toggle + unchanged `discode daemon` command surface)
 
 ### B7 - Canary and Default Flip
 
