@@ -113,9 +113,29 @@ export async function configCommand(options: {
   }
 
   if (options.server) {
-    stateManager.setGuildId(options.server);
-    saveConfig({ serverId: options.server });
-    console.log(chalk.green(`✅ Server ID saved: ${options.server}`));
+    const serverId = options.server.trim();
+    const effectivePlatform =
+      options.platform === 'slack' ? 'slack' : (config.messagingPlatform || 'discord');
+
+    if (effectivePlatform === 'slack') {
+      // Slack workspace IDs: T followed by 5–11 uppercase alphanumeric chars (e.g. T01ABCDEF)
+      if (!/^T[A-Z0-9]{5,11}$/.test(serverId)) {
+        console.error(chalk.red(`Invalid Slack workspace ID: "${serverId}"`));
+        console.error(chalk.red('Slack workspace IDs start with "T" followed by uppercase letters and digits (e.g. T01ABCDE).'));
+        process.exit(1);
+      }
+    } else {
+      // Discord server IDs are Snowflake integers: 17–20 digits
+      if (!/^\d{17,20}$/.test(serverId)) {
+        console.error(chalk.red(`Invalid Discord server ID: "${serverId}"`));
+        console.error(chalk.red('Discord server IDs are 17–20 digit numbers. Right-click your server icon → "Copy Server ID".'));
+        process.exit(1);
+      }
+    }
+
+    stateManager.setGuildId(serverId);
+    saveConfig({ serverId });
+    console.log(chalk.green(`✅ Server ID saved: ${serverId}`));
     updated = true;
   }
 
