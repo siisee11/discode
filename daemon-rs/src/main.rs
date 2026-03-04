@@ -1,5 +1,6 @@
 mod compat;
 mod hook_server;
+mod integration_router;
 mod runtime_control;
 mod runtime_stream;
 

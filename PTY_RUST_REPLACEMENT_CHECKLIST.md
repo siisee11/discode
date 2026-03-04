@@ -217,15 +217,15 @@ Exit criteria:
 
 ### B5 - Integrations and Router Port
 
-- [ ] port project bootstrap/mapping rebuild behavior
-- [ ] port message router logic and attachment injection behavior
-- [ ] port channel/project resolution rules and edge case handling
-- [ ] port submit timing behavior by agent type
-- [ ] add integration tests with mocked messaging providers
+- [x] port project bootstrap/mapping rebuild behavior (`daemon-rs/src/integration_router.rs` -> `ProjectBootstrap`, `rebuild_channel_mappings`)
+- [x] port message router logic and attachment injection behavior (`daemon-rs/src/integration_router.rs` -> `BridgeMessageRouter`, `AttachmentProcessor`)
+- [x] port channel/project resolution rules and edge case handling (`daemon-rs/src/integration_router.rs` -> mapped-instance/channel/primary resolution + failure guidance)
+- [x] port submit timing behavior by agent type (`daemon-rs/src/integration_router.rs` -> agent-specific submit delay env/default policy)
+- [x] add integration tests with mocked messaging providers (`daemon-rs/src/integration_router.rs` unit/integration-style tests with mocked state/messaging/runtime/pending/attachments)
 
 Exit criteria:
 
-- [ ] routing and delivery parity validated on integration suite
+- [x] routing and delivery parity validated on integration suite (`cargo test --manifest-path daemon-rs/Cargo.toml`; integration_router tests + runtime tests, `npm run test:daemon-contract`)
 
 ### B6 - CLI Transition Strategy
 

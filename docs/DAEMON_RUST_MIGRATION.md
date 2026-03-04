@@ -285,3 +285,52 @@ Validation:
 - `daemon-rs/src/runtime_stream.rs` includes stress tests for:
   - concurrent stream clients
   - rapid resize/input bursts
+
+## B5 integrations and router bootstrap (current implementation)
+
+Integration/router module:
+
+- `daemon-rs/src/integration_router.rs`
+
+Ported bootstrap behavior:
+
+- `ProjectBootstrap` ports project bootstrap flow for migration scope:
+  - recognized-agent integration installation fanout (`opencode`, `claude`, `gemini`)
+  - file instruction installation and send-script install attempt
+  - event-hook promotion when integration reports hook installation
+- `rebuild_channel_mappings` ports mapping rebuild from project instances:
+  - emits `{ channel_id, project_name, agent_type, instance_id }`
+  - skips instances without channel bindings
+
+Ported message router behavior:
+
+- `BridgeMessageRouter` ports core message-routing logic:
+  - help command path
+  - project lookup and instance resolution precedence:
+    1) explicit mapped instance id
+    2) channel-bound instance
+    3) primary instance by agent type
+  - attachment marker injection via `AttachmentProcessor` abstraction
+  - pending lifecycle hooks (`mark_pending` -> fallback `ensure_pending`, prompt preview)
+  - runtime delivery path (`type_keys` -> submit delay -> `send_enter`)
+  - delivery failure guidance parity for missing-window vs generic runtime errors
+
+Submit timing parity:
+
+- opencode submit delay:
+  - env `DISCODE_OPENCODE_SUBMIT_DELAY_MS`
+  - default `75ms`
+- non-opencode submit delay:
+  - env `DISCODE_SUBMIT_DELAY_MS`
+  - default `300ms`
+
+Integration tests with mocked providers:
+
+- `daemon-rs/src/integration_router.rs` test coverage includes:
+  - bootstrap mapping rebuild + hook promotion behavior
+  - reload mapping behavior
+  - multi-instance routing and mapped-instance override
+  - attachment marker injection into routed prompt
+  - channel/project edge-case handling
+  - submit timing behavior by agent type and env override
+  - delivery error guidance and pending fallback behavior
