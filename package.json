@@ -29,12 +29,15 @@
     "pack:release": "node scripts/pack-release.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:daemon-contract": "vitest run tests/e2e/event-lifecycle-errors.test.ts tests/bridge/hook-runtime-routes.test.ts tests/bridge/hook-runtime-routes-input.test.ts tests/bridge/hook-runtime-routes-ensure.test.ts tests/bridge/hook-runtime-routes-sendfiles.test.ts tests/runtime/control-plane.test.ts tests/runtime/stream-server.test.ts tests/types/hook-contract.test.ts tests/config/index.test.ts tests/state/state-compatibility.test.ts",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:runtime:pty-rust": "vitest run tests/runtime/rust-sidecar-client.test.ts tests/runtime/pty-rust-runtime.test.ts tests/runtime/mode.test.ts",
     "sidecar:build": "cargo build --release --manifest-path sidecar/pty-rust/Cargo.toml",
     "sidecar:package": "npm run sidecar:build && node scripts/package-sidecar-binary.mjs",
-    "sidecar:bench": "node scripts/bench-sidecar-latency.mjs"
+    "sidecar:bench": "node scripts/bench-sidecar-latency.mjs",
+    "daemon-rs:build": "cargo build --release --manifest-path daemon-rs/Cargo.toml",
+    "daemon-rs:test": "cargo test --manifest-path daemon-rs/Cargo.toml"
   },
   "keywords": [
     "discord",

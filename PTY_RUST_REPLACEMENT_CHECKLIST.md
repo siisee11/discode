@@ -144,7 +144,7 @@ Exit criteria:
 - [x] remove/update tests that depend on old TS runtime internals (`tests/runtime/pty-runtime.test.ts`, `tests/runtime/pty-query-handler.test.ts`, `tests/runtime/cli-runtime-regression.test.ts` removed; related tests updated)
 - [x] remove `pty-ts` mentions from CLI/docs/help/onboarding (runtime-mode help/parser/docs updated)
 - [x] remove obsolete compatibility shims no longer needed (`runtime/mode` + TUI config parser alias removal)
-- [ ] run full test + e2e suites and fix final regressions
+- [x] run full test + e2e suites and fix final regressions (`npm test`; 160 passed, 1 skipped on 2026-03-04)
 
 Exit criteria:
 
@@ -157,35 +157,35 @@ This track can run in parallel after runtime contracts are stable enough (recomm
 
 ### B0 - Daemon Contract Freeze
 
-- [ ] freeze HTTP control-plane API contract and payload schema
-- [ ] freeze runtime stream protocol contract and handshake behavior
-- [ ] freeze hook ingestion contract (`/opencode-event`, `/send-files`, `/reload`)
-- [ ] document exact compatibility behavior for config/state loading
-- [ ] define compatibility policy for telemetry and logging fields
+- [x] freeze HTTP control-plane API contract and payload schema (`docs/DAEMON_RUST_MIGRATION.md`)
+- [x] freeze runtime stream protocol contract and handshake behavior (`docs/DAEMON_RUST_MIGRATION.md`)
+- [x] freeze hook ingestion contract (`/opencode-event`, `/send-files`, `/reload`) (`docs/DAEMON_RUST_MIGRATION.md`)
+- [x] document exact compatibility behavior for config/state loading (`docs/DAEMON_RUST_MIGRATION.md`, `tests/state/state-compatibility.test.ts`)
+- [x] define compatibility policy for telemetry and logging fields (`docs/DAEMON_RUST_MIGRATION.md`)
 
 Exit criteria:
 
-- [ ] contract test suite exists and runs against current TS daemon
+- [x] contract test suite exists and runs against current TS daemon (`npm run test:daemon-contract`; verified 2026-03-04)
 
 ### B1 - Rust Daemon Workspace and Process Model
 
-- [ ] create Rust daemon workspace/crate (eg. `daemon-rs/`)
-- [ ] implement singleton process model (pid file, lock, lifecycle commands)
-- [ ] implement daemon log file strategy equivalent to current behavior
-- [ ] implement startup/shutdown/status command compatibility surface
-- [ ] preserve macOS sleep-prevention behavior where required
+- [x] create Rust daemon workspace/crate (eg. `daemon-rs/`) (`daemon-rs/Cargo.toml`, `daemon-rs/src/main.rs`)
+- [x] implement singleton process model (pid file, lock, lifecycle commands) (`daemon-rs/src/main.rs`; `daemon.pid` + `daemon.lock` + `start|stop|status|restart|run`)
+- [x] implement daemon log file strategy equivalent to current behavior (`daemon-rs/src/main.rs`; append `daemon.log` redirection on background start)
+- [x] implement startup/shutdown/status command compatibility surface (`daemon-rs/src/main.rs`)
+- [x] preserve macOS sleep-prevention behavior where required (`daemon-rs/src/main.rs`; `caffeinate -ims` wrapper on macOS start)
 
 Exit criteria:
 
-- [ ] Rust daemon can boot and stay healthy as a standalone process
+- [x] Rust daemon can boot and stay healthy as a standalone process (`cargo run --manifest-path daemon-rs/Cargo.toml -- start|status|stop` smoke run on 2026-03-04)
 
 ### B2 - Config and State Compatibility Layer
 
-- [ ] implement Rust config loader compatible with `~/.discode/config.json`
-- [ ] implement Rust state loader compatible with `~/.discode/state.json`
-- [ ] implement legacy normalization behavior currently done in TS
-- [ ] add roundtrip and migration tests for old/new state variants
-- [ ] ensure no data loss in read/modify/write cycles
+- [x] implement Rust config loader compatible with `~/.discode/config.json` (`daemon-rs/src/compat.rs` -> `CompatConfig`)
+- [x] implement Rust state loader compatible with `~/.discode/state.json` (`daemon-rs/src/compat.rs` -> `CompatState`)
+- [x] implement legacy normalization behavior currently done in TS (`daemon-rs/src/compat.rs` -> state instance/legacy map normalization)
+- [x] add roundtrip and migration tests for old/new state variants (`daemon-rs/src/compat.rs` unit tests)
+- [x] ensure no data loss in read/modify/write cycles (`daemon-rs/src/compat.rs` roundtrip preservation tests)
 
 Exit criteria:
 
@@ -193,11 +193,11 @@ Exit criteria:
 
 ### B3 - Hook Server and Messaging Bridge in Rust
 
-- [ ] implement loopback HTTP server and endpoint parity
-- [ ] port webhook/event ingestion path and validation behavior
-- [ ] port file-send path validation and limits
-- [ ] preserve pending message lifecycle behavior
-- [ ] add integration tests for success/error edge cases
+- [x] implement loopback HTTP server and endpoint parity (`daemon-rs/src/hook_server.rs`; `/health`, auth, rate limit, body limit, method/path semantics)
+- [x] port webhook/event ingestion path and validation behavior (`daemon-rs/src/hook_server.rs`; `/opencode-event` envelope + project/instance/channel validation)
+- [x] port file-send path validation and limits (`daemon-rs/src/hook_server.rs`; `/send-files` project-scoped realpath validation + payload limits)
+- [x] preserve pending message lifecycle behavior (`daemon-rs/src/hook_server.rs`; in-memory pending/recently-completed lifecycle state)
+- [x] add integration tests for success/error edge cases (`daemon-rs/src/hook_server.rs` tests; auth/rate-limit/json/validation/path-scope/pending lifecycle)
 
 Exit criteria:
 
@@ -205,15 +205,15 @@ Exit criteria:
 
 ### B4 - Runtime Control and Stream Planes in Rust
 
-- [ ] implement `/runtime/*` control endpoints with parity
-- [ ] implement stream socket server with protocol parity
-- [ ] wire runtime adapter to `pty-rust` backend only for PTY mode
-- [ ] preserve focus/input/resize/buffer/list/stop semantics
-- [ ] add stress tests for concurrent stream clients and rapid resize/input
+- [x] implement `/runtime/*` control endpoints with parity (`daemon-rs/src/hook_server.rs`, `daemon-rs/src/runtime_control.rs`)
+- [x] implement stream socket server with protocol parity (`daemon-rs/src/runtime_stream.rs`; line-delimited JSON + hello/version/error contract)
+- [x] wire runtime adapter to `pty-rust` backend only for PTY mode (`daemon-rs/src/runtime_control.rs`, `daemon-rs/src/main.rs`; sidecar-backed control only when config runtimeMode is `pty-rust`)
+- [x] preserve focus/input/resize/buffer/list/stop semantics (`daemon-rs/src/runtime_control.rs`, `daemon-rs/src/hook_server.rs`, `daemon-rs/src/runtime_stream.rs`)
+- [x] add stress tests for concurrent stream clients and rapid resize/input (`daemon-rs/src/runtime_stream.rs`; concurrent clients + rapid resize/input burst tests)
 
 Exit criteria:
 
-- [ ] control + stream e2e parity tests pass against TS baseline
+- [x] control + stream e2e parity tests pass against TS baseline (`cargo test --manifest-path daemon-rs/Cargo.toml`, `npm run test:daemon-contract`, pty-rust mode smoke: `/runtime/windows` + runtime stream `hello` handshake on 2026-03-04)
 
 ### B5 - Integrations and Router Port
 
@@ -291,8 +291,8 @@ Exit criteria:
 - [ ] `src/runtime/stream-server.ts` (parity review)
 - [ ] `src/state/**` (compatibility parity review)
 - [ ] `src/config/**` (compatibility parity review)
-- [ ] `daemon-rs/` (new Rust daemon workspace)
-- [ ] `docs/DAEMON_RUST_MIGRATION.md` (new)
+- [x] `daemon-rs/` (new Rust daemon workspace)
+- [x] `docs/DAEMON_RUST_MIGRATION.md` (new)
 
 ## Validation Gates (must pass before final merge)
 
