@@ -4,6 +4,7 @@ import { getConfigValue, saveConfig } from '../../config/index.js';
 import { normalizeDiscordToken } from '../../config/token.js';
 import { ensureOpencodePermissionChoice } from '../common/opencode-permission.js';
 import { confirmYesNo, isInteractiveShell, prompt } from '../common/interactive.js';
+import { printCliError } from '../common/error-guide.js';
 import { ensureTelemetryInstallId } from '../../telemetry/index.js';
 import { onboardDiscord } from './onboard-discord.js';
 import { onboardSlack } from './onboard-slack.js';
@@ -205,8 +206,7 @@ export async function onboardCommand(options: {
     if (options.exitOnError === false) {
       throw error;
     }
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(chalk.red('Onboarding failed:'), message);
+    printCliError(error, 'Onboarding failed');
     process.exit(1);
   }
 }

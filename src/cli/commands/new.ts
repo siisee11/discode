@@ -26,6 +26,7 @@ import {
 } from '../common/tmux.js';
 import { isInteractiveShell, prompt } from '../common/interactive.js';
 import { ensureOpencodePermissionChoice } from '../common/opencode-permission.js';
+import { printCliError } from '../common/error-guide.js';
 import { isPtyRuntimeMode } from '../../runtime/mode.js';
 
 export async function newCommand(
@@ -272,7 +273,7 @@ export async function newCommand(
 
     console.log(chalk.gray(`\n   To attach later: discode attach ${projectName}\n`));
   } catch (error) {
-    console.error(chalk.red('Error:'), error);
+    printCliError(error);
     process.exit(1);
   }
 }

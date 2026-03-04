@@ -11,6 +11,7 @@ import {
   ensureTmuxInstalled,
   resolveProjectWindowName,
 } from '../common/tmux.js';
+import { printCliError } from '../common/error-guide.js';
 import { isPtyRuntimeMode } from '../../runtime/mode.js';
 
 export async function startCommand(options: TmuxCliOptions & { project?: string; attach?: boolean }) {
@@ -92,7 +93,7 @@ export async function startCommand(options: TmuxCliOptions & { project?: string;
 
     await bridge.start();
   } catch (error) {
-    console.error(chalk.red('Error starting bridge:'), error);
+    printCliError(error, 'Error starting bridge');
     process.exit(1);
   }
 }

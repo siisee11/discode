@@ -28,6 +28,7 @@ import { logsCommand } from '../src/cli/commands/logs.js';
 import { getDaemonStatus, restartDaemonIfRunning } from '../src/app/daemon-service.js';
 import { addTmuxOptions } from '../src/cli/common/options.js';
 import { confirmYesNo, isInteractiveShell } from '../src/cli/common/interactive.js';
+import { printCliError } from '../src/cli/common/error-guide.js';
 import { recordCliCommandTelemetry } from '../src/telemetry/index.js';
 
 export { newCommand, attachCommand, stopCommand };
@@ -468,7 +469,7 @@ export async function runCli(rawArgs: string[] = hideBin(process.argv)): Promise
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   runCli().catch((error) => {
-    console.error(chalk.red('Fatal CLI error:'), error);
+    printCliError(error, 'Fatal CLI error');
     process.exit(1);
   });
 }
