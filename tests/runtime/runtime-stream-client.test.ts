@@ -136,4 +136,62 @@ describe('RuntimeStreamClient', () => {
     await waitFor(() => patches.length > 0);
     expect(patches[0]).toEqual({ lineCount: 2, firstText: 'Hello' });
   });
+
+  it('handles daemon-rs frame-styled envelope payload', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'discode-stream-client-daemonrs-'));
+    registerCleanup(() => rmSync(dir, { recursive: true, force: true }));
+    const socketPath = join(dir, 'runtime.sock');
+
+    const server = createServer((socket) => {
+      socket.on('data', (chunk) => {
+        const text = chunk.toString('utf8');
+        const lines = text.split('\n').map((line) => line.trim()).filter(Boolean);
+        for (const line of lines) {
+          const msg = JSON.parse(line) as { type?: string };
+          if (msg.type === 'subscribe') {
+            socket.write(`${JSON.stringify({
+              type: 'frame-styled',
+              windowId: 'bridge:demo-opencode',
+              streamProtocolVersion: 1,
+              frame: {
+                lines: [{
+                  segments: [{ text: 'OpenCode UI', fg: '#ffffff' }],
+                }],
+                cursorRow: 0,
+                cursorCol: 3,
+                cursorVisible: true,
+              },
+            })}\n`);
+          }
+        }
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(socketPath, resolve));
+    registerCleanup(() => server.close());
+
+    const frames: Array<{ firstText: string; cursorRow?: number; cursorCol?: number; cursorVisible?: boolean }> = [];
+    const client = new RuntimeStreamClient(socketPath, {
+      onFrameStyled: (frame) => {
+        frames.push({
+          firstText: frame.lines[0]?.segments[0]?.text || '',
+          cursorRow: frame.cursorRow,
+          cursorCol: frame.cursorCol,
+          cursorVisible: frame.cursorVisible,
+        });
+      },
+    });
+    registerCleanup(() => client.disconnect());
+
+    const connected = await client.connect();
+    expect(connected).toBe(true);
+
+    client.subscribe('bridge:demo-opencode', 120, 40);
+    await waitFor(() => frames.length > 0);
+    expect(frames[0]).toEqual({
+      firstText: 'OpenCode UI',
+      cursorRow: 0,
+      cursorCol: 3,
+      cursorVisible: true,
+    });
+  });
 });

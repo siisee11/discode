@@ -285,6 +285,7 @@ export class RuntimeSessionManager {
       }
       const subscribed = this.streamSubscriptions.get(windowId);
       if (subscribed && Date.now() - subscribed.subscribedAt < 1500) return undefined;
+      this.retrySubscription(windowId, width, height);
       this.setTransportStatus({ mode: 'stream', connected: true, detail: 'waiting for stream frame' });
       return undefined;
     } catch {
@@ -356,6 +357,15 @@ export class RuntimeSessionManager {
     const prev = this.streamSubscriptions.get(windowId);
     if (prev && prev.cols === cols && prev.rows === rows) return;
     this.streamClient.subscribe(windowId, cols, rows);
+    this.streamSubscriptions.set(windowId, { cols, rows, subscribedAt: Date.now() });
+  }
+
+  private retrySubscription(windowId: string, width?: number, height?: number): void {
+    if (!this.runtimeStreamConnected || !this.streamClient.isConnected()) return;
+    const cols = Math.max(30, Math.min(240, Math.floor(width || 120)));
+    const rows = Math.max(10, Math.min(120, Math.floor(height || 40)));
+    this.streamClient.subscribe(windowId, cols, rows);
+    this.streamClient.focus(windowId);
     this.streamSubscriptions.set(windowId, { cols, rows, subscribedAt: Date.now() });
   }
 

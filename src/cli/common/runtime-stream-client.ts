@@ -32,6 +32,18 @@ type FrameStyledMessage = {
   cursorVisible?: boolean;
 };
 
+type FrameStyledEnvelopeMessage = {
+  type: 'frame-styled';
+  streamProtocolVersion?: number;
+  windowId: string;
+  frame: {
+    lines: TerminalStyledLine[];
+    cursorRow?: number;
+    cursorCol?: number;
+    cursorVisible?: boolean;
+  };
+};
+
 type PatchStyledMessage = {
   type: 'patch-styled';
   streamProtocolVersion?: number;
@@ -56,6 +68,7 @@ type RuntimeStreamMessage =
   | FrameMessage
   | PatchMessage
   | FrameStyledMessage
+  | FrameStyledEnvelopeMessage
   | PatchStyledMessage
   | WindowExitMessage
   | { type: 'hello'; ok: boolean; streamProtocolVersion?: number }
@@ -219,7 +232,21 @@ export class RuntimeStreamClient {
       return;
     }
     if (msg.type === 'frame-styled') {
-      this.handlers.onFrameStyled?.(msg);
+      const envelope = msg as FrameStyledEnvelopeMessage;
+      if (envelope.frame && typeof envelope.frame === 'object' && Array.isArray(envelope.frame.lines)) {
+        this.handlers.onFrameStyled?.({
+          type: 'frame-styled',
+          streamProtocolVersion: envelope.streamProtocolVersion,
+          windowId: envelope.windowId,
+          seq: Number.isFinite((msg as { seq?: number }).seq) ? (msg as { seq?: number }).seq as number : 0,
+          lines: envelope.frame.lines,
+          cursorRow: envelope.frame.cursorRow,
+          cursorCol: envelope.frame.cursorCol,
+          cursorVisible: envelope.frame.cursorVisible,
+        });
+      } else {
+        this.handlers.onFrameStyled?.(msg as FrameStyledMessage);
+      }
       return;
     }
     if (msg.type === 'patch-styled') {

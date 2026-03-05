@@ -156,6 +156,15 @@ describe('handleTuiCommand', () => {
     expect(lines.some((l) => l.includes('Session created'))).toBe(true);
   });
 
+  it('discode new alias calls newCommand with parsed args', async () => {
+    const deps = createMockDeps();
+    await handleTuiCommand('discode new myProject', append, deps);
+    expect(mockNewCommand).toHaveBeenCalledWith('claude', expect.objectContaining({
+      name: 'myProject',
+    }));
+    expect(lines.some((l) => l.includes('Session created'))).toBe(true);
+  });
+
   it('/new --path passes cwd override', async () => {
     const deps = createMockDeps();
     await handleTuiCommand('/new --path "/tmp/work dir"', append, deps);

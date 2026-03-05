@@ -492,10 +492,37 @@ function TuiApp(props: { input: TuiInput; close: () => void }) {
     setCommandStatusLine(text.length > 52 ? `${text.slice(0, 49)}...` : text);
   };
 
+  const isNewSessionCommand = (command: string): boolean => {
+    const trimmed = command.trim();
+    return /^\/?new(\s|$)/.test(trimmed) || /^discode\s+new(\s|$)/i.test(trimmed);
+  };
+
+  const parseCreatedProject = (lines: string[]): string | undefined => {
+    const createdLine = lines.find((line) => line.startsWith('✅ Session created:'));
+    if (createdLine) {
+      const value = createdLine.slice('✅ Session created:'.length).trim();
+      if (value.length > 0) return value;
+    }
+
+    const projectLine = lines.find((line) => line.startsWith('[project] '));
+    if (!projectLine) return undefined;
+    const value = projectLine.slice('[project] '.length).trim();
+    if (!value) return undefined;
+    const withAgentIndex = value.indexOf(' (');
+    const project = withAgentIndex > 0 ? value.slice(0, withAgentIndex).trim() : value;
+    return project.length > 0 ? project : undefined;
+  };
+
   const executeCommand = async (command: string) => {
     const { lines, shouldClose } = await runCommandCapture(command);
     const status = lines.find((line) => line.startsWith('⚠️')) || lines.find((line) => line.startsWith('✅')) || lines[lines.length - 1];
     setCompactStatus(status || 'status: command executed');
+    if (isNewSessionCommand(command)) {
+      const project = parseCreatedProject(lines);
+      if (project) {
+        await focusProject(project);
+      }
+    }
     if (shouldClose) {
       renderer.destroy();
       props.close();

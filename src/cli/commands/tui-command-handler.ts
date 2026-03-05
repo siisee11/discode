@@ -23,55 +23,87 @@ export type TuiCommandDeps = {
   reloadStateFromDisk: () => void;
 };
 
+const DISCODE_SUBCOMMANDS = new Set([
+  'new',
+  'onboard',
+  'list',
+  'projects',
+  'config',
+  'stop',
+  'help',
+  'exit',
+  'quit',
+]);
+
+function normalizeCommand(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed.toLowerCase().startsWith('discode ')) return raw;
+  const rest = trimmed.slice('discode '.length).trim();
+  if (!rest) return raw;
+  const first = rest.split(/\s+/, 1)[0]?.toLowerCase() || '';
+  if (!DISCODE_SUBCOMMANDS.has(first)) return raw;
+  return `/${rest}`;
+}
+
 export async function handleTuiCommand(
   command: string,
   append: (line: string) => void,
   deps: TuiCommandDeps,
 ): Promise<'exit' | 'handled'> {
+  const trimmedCommand = command.trim();
+  const normalizedCommand = normalizeCommand(trimmedCommand);
   const { session } = deps;
 
-  if (command === '/exit' || command === '/quit') {
+  if (normalizedCommand === '/exit' || normalizedCommand === '/quit') {
     append('Exiting TUI...');
     return 'exit';
   }
 
-  if (command === '/help') {
+  if (normalizedCommand === '/help') {
     append('Commands: /new [name] [agent] [--path dir] [--instance id] [--attach], /onboard [options], /list, /projects, /config [keepChannel [on|off|toggle] | defaultAgent [agent|auto] | defaultChannel [channelId|auto] | runtimeMode [tmux|pty-rust|toggle]], /help, /exit');
     append('Onboard options: --platform [discord|slack], --runtime-mode [tmux|pty-rust], --token, --slack-bot-token, --slack-app-token, --default-agent [name|auto], --telemetry [on|off], --opencode-permission [allow|default]');
     return 'handled';
   }
 
-  if (command === '/onboard' || command === 'onboard' || command.startsWith('/onboard ') || command.startsWith('onboard ')) {
-    return handleOnboard(command, append);
+  if (
+    normalizedCommand === '/onboard' ||
+    normalizedCommand.startsWith('/onboard ') ||
+    trimmedCommand === 'onboard' ||
+    trimmedCommand.startsWith('onboard ')
+  ) {
+    const onboardCommand = normalizedCommand.startsWith('/onboard') ? normalizedCommand : trimmedCommand;
+    return handleOnboard(onboardCommand, append);
   }
 
-  if (command === '/config' || command === 'config') {
+  if (normalizedCommand === '/config' || trimmedCommand === 'config') {
     return handleConfigShow(append, deps);
   }
 
-  if (command.startsWith('/config ') || command.startsWith('config ')) {
-    return handleConfigSet(command, append, deps);
+  if (normalizedCommand.startsWith('/config ') || trimmedCommand.startsWith('config ')) {
+    const configCommand = normalizedCommand.startsWith('/config ') ? normalizedCommand : trimmedCommand;
+    return handleConfigSet(configCommand, append, deps);
   }
 
-  if (command === '/list') {
+  if (normalizedCommand === '/list') {
     return handleList(append, deps);
   }
 
-  if (command === '/projects') {
+  if (normalizedCommand === '/projects') {
     return handleProjects(append, deps);
   }
 
-  if (command === 'stop' || command === '/stop') {
+  if (normalizedCommand === '/stop' || trimmedCommand === 'stop') {
     append('Use stop dialog to choose a project.');
     return 'handled';
   }
 
-  if (command.startsWith('stop ') || command.startsWith('/stop ')) {
-    return handleStop(command, append, deps);
+  if (normalizedCommand.startsWith('/stop ') || trimmedCommand.startsWith('stop ')) {
+    const stopCommand = normalizedCommand.startsWith('/stop ') ? normalizedCommand : trimmedCommand;
+    return handleStop(stopCommand, append, deps);
   }
 
-  if (command.startsWith('/new')) {
-    return handleNew(command, append, deps);
+  if (normalizedCommand.startsWith('/new')) {
+    return handleNew(normalizedCommand, append, deps);
   }
 
   if (session.isSupported() !== false) {

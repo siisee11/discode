@@ -7,8 +7,12 @@ import { stateManager } from '../../state/index.js';
 import { agentRegistry } from '../../agents/index.js';
 import { TmuxManager } from '../../tmux/manager.js';
 import { listProjectInstances } from '../../state/instances.js';
-import { defaultDaemonManager } from '../../daemon.js';
-import { ensureDaemonRunning, getDaemonStatus, restartDaemonIfRunning } from '../../app/daemon-service.js';
+import {
+  ensureDaemonRunning,
+  getDaemonLogFilePath,
+  getDaemonStatus,
+  restartDaemonIfRunning,
+} from '../../app/daemon-service.js';
 import { isPtyRuntimeMode } from '../../runtime/mode.js';
 import type { TmuxCliOptions } from '../common/types.js';
 import {
@@ -67,6 +71,21 @@ function nextProjectName(baseName: string): string {
 
 function reloadStateFromDisk(): void {
   stateManager.reload();
+}
+
+function isControlWindowName(windowName: string | undefined): boolean {
+  if (!windowName) return false;
+  const normalized = windowName.trim().toLowerCase();
+  return normalized === '0' || normalized === 'discode-control' || normalized === 'discode-tui';
+}
+
+function summarizeRuntimeWindows(
+  windows: Array<{ windowId: string; windowName: string }> | undefined,
+  limit: number = 6,
+): string {
+  if (!windows || windows.length === 0) return '(none)';
+  const listed = windows.slice(0, limit).map((window) => window.windowId);
+  return windows.length > limit ? `${listed.join(', ')} ... (+${windows.length - limit})` : listed.join(', ');
 }
 
 function handoffToBunRuntime(): never {
@@ -202,17 +221,52 @@ export async function tuiCommand(options: TmuxCliOptions): Promise<void> {
 
   const tmux = new TmuxManager(config.tmux.sessionPrefix);
   const runtimeAtStartup = await session.fetchWindows();
-  const parseWindowId = (windowId: string | undefined): { sessionName: string; windowName: string } | null => {
+  const parseWindowId = (windowId: string | undefined): { windowId: string; sessionName: string; windowName: string } | null => {
     if (!windowId) return null;
     const idx = windowId.indexOf(':');
     if (idx <= 0 || idx >= windowId.length - 1) return null;
-    return { sessionName: windowId.slice(0, idx), windowName: windowId.slice(idx + 1) };
+    return { windowId, sessionName: windowId.slice(0, idx), windowName: windowId.slice(idx + 1) };
   };
   const runtimeActiveAtStartup = parseWindowId(runtimeAtStartup?.activeWindowId);
-  const currentSession = runtimeActiveAtStartup?.sessionName || tmux.getCurrentSession(process.env.TMUX_PANE);
-  const currentWindow = runtimeActiveAtStartup?.windowName || tmux.getCurrentWindow(process.env.TMUX_PANE);
+  let runtimeInitialWindow = runtimeActiveAtStartup;
+  const hadControlActiveAtStartup = runtimeInitialWindow ? isControlWindowName(runtimeInitialWindow.windowName) : false;
+  if (runtimeAtStartup?.windows?.length) {
+    if (!runtimeInitialWindow || isControlWindowName(runtimeInitialWindow.windowName)) {
+      const nonControlWindow = runtimeAtStartup.windows.find((window) => !isControlWindowName(window.windowName));
+      const selectedWindow = nonControlWindow || runtimeAtStartup.windows[0];
+      runtimeInitialWindow = {
+        windowId: selectedWindow.windowId,
+        sessionName: selectedWindow.sessionName,
+        windowName: selectedWindow.windowName,
+      };
+    }
+  }
+  if (runtimeAtStartup?.windows?.length) {
+    const activeLabel = runtimeAtStartup.activeWindowId || '(none)';
+    const selectedLabel = runtimeInitialWindow?.windowId || '(none)';
+    const reason =
+      !runtimeAtStartup.activeWindowId
+        ? 'active missing'
+        : hadControlActiveAtStartup
+          ? 'active is control window'
+          : activeLabel === selectedLabel
+            ? 'active kept'
+            : 'selected fallback window';
+    console.log(chalk.gray(
+      `   [tui-init] runtime windows=${runtimeAtStartup.windows.length} active=${activeLabel} selected=${selectedLabel} reason=${reason}`,
+    ));
+    console.log(chalk.gray(`   [tui-init] windows: ${summarizeRuntimeWindows(runtimeAtStartup.windows)}`));
+  } else {
+    console.log(chalk.gray('   [tui-init] runtime windows=(none)'));
+  }
+  if (runtimeInitialWindow && runtimeAtStartup?.activeWindowId !== runtimeInitialWindow.windowId) {
+    const focused = await session.focusWindow(runtimeInitialWindow.windowId);
+    console.log(chalk.gray(`   [tui-init] focus ${runtimeInitialWindow.windowId}: ${focused ? 'ok' : 'failed'}`));
+  }
+  const currentSession = runtimeInitialWindow?.sessionName || tmux.getCurrentSession(process.env.TMUX_PANE);
+  const currentWindow = runtimeInitialWindow?.windowName || tmux.getCurrentWindow(process.env.TMUX_PANE);
   const runtimeModeAtLaunch = effectiveConfig.runtimeMode || 'tmux';
-  const daemonLogFile = defaultDaemonManager.getLogFile();
+  const daemonLogFile = getDaemonLogFilePath();
   let runtimeBackendCache: { mtimeMs: number; status: RuntimeBackendStatus | undefined } | undefined;
 
   const getRuntimeBackendStatus = async (): Promise<RuntimeBackendStatus | undefined> => {
@@ -357,7 +411,7 @@ export async function tuiCommand(options: TmuxCliOptions): Promise<void> {
         return session.readWindowOutput(sessionName, windowName, width, height);
       },
       getDaemonLogs: async (maxLines?: number) => {
-        const logFile = defaultDaemonManager.getLogFile();
+        const logFile = getDaemonLogFilePath();
         if (!existsSync(logFile)) {
           return [
             `No daemon log found: ${logFile}`,
