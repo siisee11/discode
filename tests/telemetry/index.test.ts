@@ -139,7 +139,7 @@ describe('telemetry', () => {
           },
         },
       ],
-      { source: 'discode-cli', version: '0.9.0' },
+      { source: 'discode-cli', version: '0.10.0' },
     );
 
     expect(mocks.fetch).toHaveBeenCalledOnce();
@@ -165,7 +165,7 @@ describe('telemetry', () => {
         name: `event_${index}`,
         params: { n: index },
       })),
-      { source: 'discode-cli', version: '0.9.0' },
+      { source: 'discode-cli', version: '0.10.0' },
     );
 
     expect(mocks.fetch).toHaveBeenCalledOnce();
