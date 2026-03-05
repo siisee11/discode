@@ -14,6 +14,43 @@ import {
 import { ensureRuntimeWindow, focusRuntimeWindow } from '../common/runtime-api.js';
 import { isPtyRuntimeMode } from '../../runtime/mode.js';
 
+const RUNTIME_FOCUS_RETRY_ATTEMPTS = 6;
+const RUNTIME_FOCUS_RETRY_DELAY_MS = 120;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function focusRuntimeWindowWithRetry(params: {
+  port: number;
+  windowId: string;
+  projectName: string;
+  instanceId?: string;
+  permissionAllow?: boolean;
+}): Promise<boolean> {
+  if (await focusRuntimeWindow(params.port, params.windowId)) {
+    return true;
+  }
+
+  await ensureRuntimeWindow({
+    port: params.port,
+    projectName: params.projectName,
+    instanceId: params.instanceId,
+    permissionAllow: params.permissionAllow,
+  });
+
+  for (let attempt = 0; attempt < RUNTIME_FOCUS_RETRY_ATTEMPTS; attempt += 1) {
+    if (await focusRuntimeWindow(params.port, params.windowId)) {
+      return true;
+    }
+    if (attempt < RUNTIME_FOCUS_RETRY_ATTEMPTS - 1) {
+      await sleep(RUNTIME_FOCUS_RETRY_DELAY_MS);
+    }
+  }
+
+  return false;
+}
+
 export async function attachCommand(projectName: string | undefined, options: TmuxCliOptions & { instance?: string }) {
   const effectiveConfig = applyTmuxCliOverrides(config, options);
   const runtimeMode = effectiveConfig.runtimeMode || 'tmux';
@@ -58,18 +95,15 @@ export async function attachCommand(projectName: string | undefined, options: Tm
     if (windowName) {
       const windowId = `${sessionName}:${windowName}`;
       const port = effectiveConfig.hookServerPort || 18470;
-      let focused = await focusRuntimeWindow(port, windowId);
+      const focused = await focusRuntimeWindowWithRetry({
+        port,
+        windowId,
+        projectName,
+        instanceId: requestedInstanceId || firstInstance?.instanceId,
+        permissionAllow: effectiveConfig.opencode?.permissionMode === 'allow',
+      });
       if (!focused) {
-        await ensureRuntimeWindow({
-          port,
-          projectName,
-          instanceId: requestedInstanceId,
-          permissionAllow: effectiveConfig.opencode?.permissionMode === 'allow',
-        });
-        focused = await focusRuntimeWindow(port, windowId);
-      }
-      if (!focused) {
-        console.log(chalk.yellow('⚠️ Could not focus runtime window.'));
+        console.log(chalk.yellow('⚠️ Could not focus runtime window. Opening TUI anyway.'));
       }
     }
 
