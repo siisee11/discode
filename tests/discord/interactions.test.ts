@@ -105,5 +105,145 @@ describe('DiscordInteractions', () => {
 
       expect(result).toBeNull();
     });
+
+    it('calls onAnswer callback with label and option index', async () => {
+      const mockInteraction = {
+        customId: 'opt_abc12345_1',
+        update: vi.fn().mockResolvedValue(undefined),
+      };
+      const mockMessage = {
+        awaitMessageComponent: vi.fn().mockResolvedValue(mockInteraction),
+      };
+      const mockChannel = {
+        isTextBased: () => true,
+        send: vi.fn().mockResolvedValue(mockMessage),
+      };
+      client.channels.fetch.mockResolvedValueOnce(mockChannel);
+
+      const onAnswer = vi.fn().mockResolvedValue(undefined);
+      const result = await interactions.sendQuestionWithButtons(
+        'ch-1',
+        [{ question: 'Pick', options: [{ label: 'A' }, { label: 'B' }] }],
+        undefined,
+        onAnswer,
+      );
+
+      expect(result).toBe('B');
+      expect(onAnswer).toHaveBeenCalledWith('B', 1);
+    });
+
+    it('handles sequential multi-question flow', async () => {
+      // First question: user selects option 0
+      const interaction1 = {
+        customId: 'opt_abc12345_0',
+        update: vi.fn().mockResolvedValue(undefined),
+      };
+      const message1 = {
+        awaitMessageComponent: vi.fn().mockResolvedValue(interaction1),
+      };
+
+      // Second question: user selects option 2
+      const interaction2 = {
+        customId: 'opt_def67890_2',
+        update: vi.fn().mockResolvedValue(undefined),
+      };
+      const message2 = {
+        awaitMessageComponent: vi.fn().mockResolvedValue(interaction2),
+      };
+
+      const mockChannel = {
+        isTextBased: () => true,
+        send: vi.fn()
+          .mockResolvedValueOnce(message1)
+          .mockResolvedValueOnce(message2),
+      };
+      client.channels.fetch.mockResolvedValueOnce(mockChannel);
+
+      const answers: Array<{ label: string; index: number }> = [];
+      const onAnswer = vi.fn(async (label: string, index: number) => {
+        answers.push({ label, index });
+      });
+
+      const result = await interactions.sendQuestionWithButtons(
+        'ch-1',
+        [
+          { question: 'Q1?', options: [{ label: 'X' }, { label: 'Y' }] },
+          { question: 'Q2?', options: [{ label: 'A' }, { label: 'B' }, { label: 'C' }] },
+        ],
+        undefined,
+        onAnswer,
+      );
+
+      expect(result).toBe('X\nC');
+      expect(onAnswer).toHaveBeenCalledTimes(2);
+      expect(answers[0]).toEqual({ label: 'X', index: 0 });
+      expect(answers[1]).toEqual({ label: 'C', index: 2 });
+    });
+  });
+
+  // ---------- sendSubmitConfirmation ----------
+
+  describe('sendSubmitConfirmation', () => {
+    it('returns true when Submit is clicked', async () => {
+      const mockInteraction = {
+        customId: 'submit',
+        update: vi.fn().mockResolvedValue(undefined),
+      };
+      const mockMessage = {
+        awaitMessageComponent: vi.fn().mockResolvedValue(mockInteraction),
+      };
+      const mockChannel = {
+        isTextBased: () => true,
+        send: vi.fn().mockResolvedValue(mockMessage),
+      };
+      client.channels.fetch.mockResolvedValueOnce(mockChannel);
+
+      const result = await interactions.sendSubmitConfirmation('ch-1', [
+        { question: 'Color', answer: 'Red' },
+      ]);
+
+      expect(result).toBe(true);
+    });
+
+    it('returns false when Cancel is clicked', async () => {
+      const mockInteraction = {
+        customId: 'cancel',
+        update: vi.fn().mockResolvedValue(undefined),
+      };
+      const mockMessage = {
+        awaitMessageComponent: vi.fn().mockResolvedValue(mockInteraction),
+      };
+      const mockChannel = {
+        isTextBased: () => true,
+        send: vi.fn().mockResolvedValue(mockMessage),
+      };
+      client.channels.fetch.mockResolvedValueOnce(mockChannel);
+
+      const result = await interactions.sendSubmitConfirmation('ch-1', [
+        { question: 'Q', answer: 'A' },
+      ]);
+
+      expect(result).toBe(false);
+    });
+
+    it('returns false when channel is not text-based', async () => {
+      client.channels.fetch.mockResolvedValueOnce({ isTextBased: () => false });
+
+      const result = await interactions.sendSubmitConfirmation('ch-1', [
+        { question: 'Q', answer: 'A' },
+      ]);
+
+      expect(result).toBe(false);
+    });
+
+    it('returns false when channel is null', async () => {
+      client.channels.fetch.mockResolvedValueOnce(null);
+
+      const result = await interactions.sendSubmitConfirmation('ch-1', [
+        { question: 'Q', answer: 'A' },
+      ]);
+
+      expect(result).toBe(false);
+    });
   });
 });

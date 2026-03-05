@@ -149,6 +149,160 @@ describe('handleSessionNotification', () => {
     const msg = (deps.messaging.sendToChannel as any).mock.calls[0][1];
     expect(msg).toContain('msg');
   });
+
+  // ── Plan approval (ExitPlanMode) ────────────────────────────
+
+  it('sends plan file and 4-option question buttons when planFilePath is set and file exists', async () => {
+    const { existsSync } = await import('fs');
+    (existsSync as any).mockReturnValue(true);
+
+    const deps = createMockDeps();
+    (deps.messaging as any).sendQuestionWithButtons = vi.fn().mockResolvedValue(null);
+    const ctx = createCtx({
+      event: { notificationType: 'plan_approval', planFilePath: '/tmp/project/.claude/plans/plan.md' },
+      text: 'Plan ready',
+    });
+
+    const result = await handleSessionNotification(deps, ctx);
+    expect(result).toBe(true);
+
+    // Should send the plan file
+    expect(deps.messaging.sendToChannelWithFiles).toHaveBeenCalledWith(
+      'ch-1', '', ['/tmp/project/.claude/plans/plan.md'],
+    );
+
+    // Should send question with 4 options matching Claude CLI ExitPlanMode
+    expect((deps.messaging as any).sendQuestionWithButtons).toHaveBeenCalledTimes(1);
+    const questionArgs = (deps.messaging as any).sendQuestionWithButtons.mock.calls[0];
+    const questions = questionArgs[1];
+    expect(questions).toHaveLength(1);
+    expect(questions[0].options).toHaveLength(4);
+    expect(questions[0].options[0].label).toContain('clear context');
+    expect(questions[0].options[1].label).toContain('bypass permissions');
+    expect(questions[0].options[2].label).toContain('manual approvals');
+    expect(questions[0].options[3].label).toContain('Give feedback');
+  });
+
+  it('skips sending plan file when file does not exist', async () => {
+    const { existsSync } = await import('fs');
+    (existsSync as any).mockReturnValue(false);
+
+    const deps = createMockDeps();
+    (deps.messaging as any).sendQuestionWithButtons = vi.fn().mockResolvedValue(null);
+    const ctx = createCtx({
+      event: { notificationType: 'plan_approval', planFilePath: '/tmp/nonexistent.md' },
+      text: 'Plan ready',
+    });
+
+    await handleSessionNotification(deps, ctx);
+    expect(deps.messaging.sendToChannelWithFiles).not.toHaveBeenCalled();
+    // Still sends question buttons
+    expect((deps.messaging as any).sendQuestionWithButtons).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns true early for plan approval (does not send promptText)', async () => {
+    const { existsSync } = await import('fs');
+    (existsSync as any).mockReturnValue(false);
+
+    const deps = createMockDeps();
+    (deps.messaging as any).sendQuestionWithButtons = vi.fn().mockResolvedValue(null);
+    const ctx = createCtx({
+      event: {
+        notificationType: 'plan_approval',
+        planFilePath: '/tmp/plan.md',
+        promptText: 'This should not be sent separately',
+      },
+      text: 'Plan ready',
+    });
+
+    await handleSessionNotification(deps, ctx);
+    // promptText should not be sent as a separate message
+    const sendToChannelCalls = (deps.messaging.sendToChannel as any).mock.calls;
+    const texts = sendToChannelCalls.map((c: any) => c[1]);
+    expect(texts).not.toContain('This should not be sent separately');
+  });
+
+  // ── AskUserQuestion (promptQuestions) ──────────────────────────
+
+  it('sends interactive buttons when promptQuestions are present', async () => {
+    const deps = createMockDeps();
+    (deps.messaging as any).sendQuestionWithButtons = vi.fn().mockResolvedValue(null);
+
+    const promptQuestions = [{
+      question: 'Which approach?',
+      header: 'Approach',
+      options: [
+        { label: 'Fast', description: 'Quick' },
+        { label: 'Safe', description: 'Reliable' },
+      ],
+    }];
+
+    const ctx = createCtx({
+      event: { notificationType: 'idle_prompt', promptQuestions },
+      text: 'Choose an option',
+    });
+
+    const result = await handleSessionNotification(deps, ctx);
+    expect(result).toBe(true);
+
+    expect((deps.messaging as any).sendQuestionWithButtons).toHaveBeenCalledTimes(1);
+    const passedQuestions = (deps.messaging as any).sendQuestionWithButtons.mock.calls[0][1];
+    expect(passedQuestions).toEqual(promptQuestions);
+  });
+
+  it('returns true early for promptQuestions (does not send promptText)', async () => {
+    const deps = createMockDeps();
+    (deps.messaging as any).sendQuestionWithButtons = vi.fn().mockResolvedValue(null);
+
+    const ctx = createCtx({
+      event: {
+        notificationType: 'idle_prompt',
+        promptQuestions: [{
+          question: 'Pick one',
+          options: [{ label: 'A' }, { label: 'B' }],
+        }],
+        promptText: 'Formatted text that should be skipped',
+      },
+      text: 'Notification',
+    });
+
+    await handleSessionNotification(deps, ctx);
+    const sendToChannelCalls = (deps.messaging.sendToChannel as any).mock.calls;
+    const texts = sendToChannelCalls.map((c: any) => c[1]);
+    expect(texts).not.toContain('Formatted text that should be skipped');
+  });
+
+  it('does not send question buttons when promptQuestions is empty', async () => {
+    const deps = createMockDeps();
+    (deps.messaging as any).sendQuestionWithButtons = vi.fn().mockResolvedValue(null);
+
+    const ctx = createCtx({
+      event: { notificationType: 'idle_prompt', promptQuestions: [] },
+      text: 'idle',
+    });
+
+    await handleSessionNotification(deps, ctx);
+    expect((deps.messaging as any).sendQuestionWithButtons).not.toHaveBeenCalled();
+  });
+
+  it('handles sendQuestionWithButtons failure gracefully for plan approval', async () => {
+    const { existsSync } = await import('fs');
+    (existsSync as any).mockReturnValue(false);
+
+    const deps = createMockDeps();
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    (deps.messaging as any).sendQuestionWithButtons = vi.fn().mockRejectedValue(new Error('button error'));
+
+    const ctx = createCtx({
+      event: { notificationType: 'plan_approval', planFilePath: '/tmp/plan.md' },
+      text: 'Plan',
+    });
+
+    // Should not throw
+    const result = await handleSessionNotification(deps, ctx);
+    expect(result).toBe(true);
+    warnSpy.mockRestore();
+  });
 });
 
 describe('handleSessionStart', () => {

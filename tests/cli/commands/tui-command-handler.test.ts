@@ -164,6 +164,7 @@ describe('handleTuiCommand', () => {
     }));
   });
 
+
   it('/onboard --help shows usage', async () => {
     const deps = createMockDeps();
     await handleTuiCommand('/onboard --help', append, deps);

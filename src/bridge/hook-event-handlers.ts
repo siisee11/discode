@@ -74,10 +74,51 @@ export async function handleSessionNotification(deps: EventHandlerDeps, ctx: Eve
     idle_prompt: '\uD83D\uDCA4',
     auth_success: '\uD83D\uDD11',
     elicitation_dialog: '\u2753',
+    plan_approval: '\uD83D\uDCCB',
   };
   const emoji = emojiMap[notificationType] || '\uD83D\uDD14';
   const msg = ctx.text || notificationType;
   await deps.messaging.sendToChannel(ctx.channelId, `${emoji} ${msg}`);
+
+  // Plan approval: send plan file and approve/reject buttons
+  const planFilePath = typeof ctx.event.planFilePath === 'string' ? ctx.event.planFilePath.trim() : '';
+  const promptQuestionsCount = Array.isArray(ctx.event.promptQuestions) ? ctx.event.promptQuestions.length : 0;
+  console.log(`🔔 [notification] type=${notificationType} planFilePath=${planFilePath || '(none)'} promptText=${(typeof ctx.event.promptText === 'string' ? ctx.event.promptText.length : 0)} chars promptQuestions=${promptQuestionsCount}`);
+  if (planFilePath) {
+    const { existsSync } = await import('fs');
+    if (existsSync(planFilePath)) {
+      await deps.messaging.sendToChannelWithFiles(ctx.channelId, '', [planFilePath]);
+    }
+    // Send plan approval choices matching Claude CLI's ExitPlanMode options.
+    // Option indices must match Claude CLI's arrow-key navigation order.
+    deps.messaging.sendQuestionWithButtons(ctx.channelId, [{
+      question: 'Proceed with the plan?',
+      header: 'Plan',
+      options: [
+        { label: 'Yes, clear context & bypass', description: 'Clear context and run without permission prompts' },
+        { label: 'Yes, bypass permissions', description: 'Approve and let Claude run without permission prompts' },
+        { label: 'Yes, manual approvals', description: 'Approve but manually approve each edit' },
+        { label: 'Give feedback', description: 'Type a message to tell Claude what to change' },
+      ],
+    }]).catch((err) => {
+      console.warn('sendQuestionWithButtons for plan approval failed:', err);
+    });
+    return true;
+  }
+
+  // AskUserQuestion: send interactive buttons when promptQuestions are present
+  const promptQuestions = Array.isArray(ctx.event.promptQuestions) ? ctx.event.promptQuestions : [];
+  if (promptQuestions.length > 0) {
+    deps.messaging.sendQuestionWithButtons(ctx.channelId, promptQuestions as Array<{
+      question: string;
+      header?: string;
+      multiSelect?: boolean;
+      options: Array<{ label: string; description?: string }>;
+    }>).catch((err) => {
+      console.warn('sendQuestionWithButtons for prompt questions failed:', err);
+    });
+    return true;
+  }
 
   // Skip promptText for elicitation_dialog — the Stop hook (session.idle) will
   // deliver it with interactive buttons via sendQuestionWithButtons.

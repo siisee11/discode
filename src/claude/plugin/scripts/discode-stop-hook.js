@@ -158,6 +158,14 @@ function parseTurnTexts(tail) {
     if (obj.type === "user") {
       const message = asObject(obj.message) || obj;
       const content = Array.isArray(message.content) ? message.content : [];
+
+      // Claude Code may store content as a plain string (not array of blocks).
+      // Treat string content as a real user message — it's a turn boundary.
+      if (typeof message.content === "string" && message.content.trim().length > 0) {
+        if (!isSystemInjectedMessage(message.content)) break;
+        continue;
+      }
+
       const hasUserText = content.some((c) => {
         const co = asObject(c);
         return co && co.type === "text";
@@ -221,15 +229,26 @@ function parseTurnTexts(tail) {
   allThinkingParts.reverse();
   allToolUseBlocks.reverse();
 
-  // Extract plan file path from ExitPlanMode tool use blocks
+  // Extract plan file path when ExitPlanMode is present.
+  // Strategy: find the most recent Write tool call targeting a .claude/plans/ path.
   var planFilePath = "";
-  for (var bi = 0; bi < allToolUseBlocks.length; bi++) {
-    if (allToolUseBlocks[bi].name === "ExitPlanMode") {
-      // Plan file path is typically in system-reminder context — scan all text for it
+  var hasExitPlanMode = allToolUseBlocks.some(function (b) { return b.name === "ExitPlanMode"; });
+  if (hasExitPlanMode) {
+    for (var bi = allToolUseBlocks.length - 1; bi >= 0; bi--) {
+      var block = allToolUseBlocks[bi];
+      if (block.name === "Write" && typeof (block.input || {}).file_path === "string") {
+        var fp = block.input.file_path;
+        if (fp.includes(".claude/plans/") && fp.endsWith(".md")) {
+          planFilePath = fp;
+          break;
+        }
+      }
+    }
+    // Fallback: scan assistant text for plan file references
+    if (!planFilePath) {
       var allText = allTextParts.join("\n") + "\n" + allThinkingParts.join("\n");
-      var planMatch = allText.match(/plan file[^:]*:\s*([^\n]+\.md)/i);
-      if (planMatch) planFilePath = planMatch[1].trim();
-      break;
+      var planMatch = allText.match(/(?:\/[^\s"')\]]+\.claude\/plans\/[^\s"')\]]+\.md)/);
+      if (planMatch) planFilePath = planMatch[0].trim();
     }
   }
 

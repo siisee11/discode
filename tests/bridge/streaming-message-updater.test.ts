@@ -148,7 +148,94 @@ describe('StreamingMessageUpdater', () => {
       );
     });
 
-    it('truncates overly long cumulative text for discord-safe update length', () => {
+    it('starts new message when content exceeds platform limit', async () => {
+      const messaging = createMockMessaging();
+      messaging.sendToChannelWithId.mockResolvedValue('new-msg-ts');
+      const updater = new StreamingMessageUpdater(messaging as any);
+      updater.start('proj', 'inst', 'ch-1', 'msg-1');
+
+      // Fill up near the limit (slack = 3900)
+      const bigLine = 'x'.repeat(3890);
+      updater.appendCumulative('proj', 'inst', bigLine);
+      vi.advanceTimersByTime(800);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(messaging.updateMessage).toHaveBeenCalledTimes(1);
+
+      // This line would push past 3900 → triggers overflow
+      updater.appendCumulative('proj', 'inst', 'overflow line');
+      vi.advanceTimersByTime(800);
+      await vi.advanceTimersByTimeAsync(0);
+
+      // Should have created a new message instead of updating
+      expect(messaging.sendToChannelWithId).toHaveBeenCalledWith('ch-1', 'overflow line');
+    });
+
+    it('uses new message ID for subsequent updates after overflow', async () => {
+      const messaging = createMockMessaging();
+      messaging.sendToChannelWithId.mockResolvedValue('new-msg-ts');
+      const updater = new StreamingMessageUpdater(messaging as any);
+      updater.start('proj', 'inst', 'ch-1', 'msg-1');
+
+      // Fill near limit (3890 + 1 + 13 = 3904 > 3900 triggers overflow)
+      const bigLine = 'x'.repeat(3890);
+      updater.appendCumulative('proj', 'inst', bigLine);
+      vi.advanceTimersByTime(800);
+      await vi.advanceTimersByTimeAsync(0);
+
+      updater.appendCumulative('proj', 'inst', 'overflow line');
+      vi.advanceTimersByTime(800);
+      await vi.advanceTimersByTimeAsync(0);
+
+      // Now append more content — should update the NEW message ID
+      // (13 + 1 + 9 = 23 < 3900, no overflow)
+      updater.appendCumulative('proj', 'inst', 'next line');
+      vi.advanceTimersByTime(800);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(messaging.updateMessage).toHaveBeenLastCalledWith(
+        'ch-1',
+        'new-msg-ts',
+        'overflow line\nnext line',
+      );
+    });
+
+    it('handles multiple overflows creating multiple new messages', async () => {
+      const messaging = createMockMessaging();
+      let msgCounter = 0;
+      messaging.sendToChannelWithId.mockImplementation(async () => `new-msg-${++msgCounter}`);
+      const updater = new StreamingMessageUpdater(messaging as any);
+      updater.start('proj', 'inst', 'ch-1', 'msg-1');
+
+      // First overflow: 3890 + 1 + 10 = 3901 > 3900
+      const bigLine = 'x'.repeat(3890);
+      updater.appendCumulative('proj', 'inst', bigLine);
+      vi.advanceTimersByTime(800);
+      await vi.advanceTimersByTimeAsync(0);
+
+      updater.appendCumulative('proj', 'inst', 'overflow-1');
+      vi.advanceTimersByTime(800);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(messaging.sendToChannelWithId).toHaveBeenCalledWith('ch-1', 'overflow-1');
+
+      // Fill up the new message: after overflow, currentText="overflow-1" (10 chars)
+      // 10 + 1 + 3880 = 3891 < 3900 → fits
+      const bigLine2 = 'x'.repeat(3880);
+      updater.appendCumulative('proj', 'inst', bigLine2);
+      vi.advanceTimersByTime(800);
+      await vi.advanceTimersByTimeAsync(0);
+
+      // Second overflow: 3891 + 1 + 10 = 3902 > 3900
+      updater.appendCumulative('proj', 'inst', 'overflow-2');
+      vi.advanceTimersByTime(800);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(messaging.sendToChannelWithId).toHaveBeenCalledTimes(2);
+      expect(messaging.sendToChannelWithId).toHaveBeenLastCalledWith('ch-1', 'overflow-2');
+    });
+
+    it('overflows to new message when cumulative text exceeds discord limit', () => {
       const messaging = {
         ...createMockMessaging(),
         platform: 'discord' as const,
@@ -163,10 +250,11 @@ describe('StreamingMessageUpdater', () => {
 
       vi.advanceTimersByTime(800);
 
-      const call = messaging.updateMessage.mock.calls.at(-1);
-      const content = call?.[2] as string;
+      // Overflow resets history to latest line and sends via new message
+      expect(messaging.sendToChannelWithId).toHaveBeenCalled();
+      const call = messaging.sendToChannelWithId.mock.calls.at(-1);
+      const content = call?.[1] as string;
       expect(content.length).toBeLessThanOrEqual(1900);
-      expect(content.startsWith('...(truncated)\n')).toBe(true);
     });
   });
 
@@ -184,21 +272,22 @@ describe('StreamingMessageUpdater', () => {
       expect(updater.has('proj', 'inst')).toBe(false);
     });
 
-    it('cancels pending debounce timer', async () => {
+    it('flushes pending content before posting Done when debounce has not fired', async () => {
       const messaging = createMockMessaging();
       const updater = new StreamingMessageUpdater(messaging as any);
       updater.start('proj', 'inst', 'ch-1', 'msg-1');
       updater.append('proj', 'inst', 'tool 1');
 
-      // Finalize before debounce fires
+      // Finalize before debounce fires — should flush pending content then post Done
       await updater.finalize('proj', 'inst');
 
       // Advance past debounce — should not trigger extra update
       vi.advanceTimersByTime(1000);
 
-      // Finalize posts one completion message, and timer does not trigger extra edit.
+      expect(messaging.updateMessage).toHaveBeenCalledTimes(1);
+      expect(messaging.updateMessage).toHaveBeenCalledWith('ch-1', 'msg-1', 'tool 1');
       expect(messaging.sendToChannel).toHaveBeenCalledTimes(1);
-      expect(messaging.updateMessage).not.toHaveBeenCalled();
+      expect(messaging.sendToChannel).toHaveBeenCalledWith('ch-1', '\u2705 Done');
     });
 
     it('uses custom header when provided', async () => {
@@ -242,6 +331,31 @@ describe('StreamingMessageUpdater', () => {
 
       expect(messaging.sendToChannel).not.toHaveBeenCalled();
       expect(messaging.updateMessage).not.toHaveBeenCalled();
+      expect(updater.has('proj', 'inst')).toBe(true);
+    });
+
+    it('finalizes when originId matches expectedMessageId even if messageId differs', async () => {
+      const messaging = createMockMessaging();
+      const updater = new StreamingMessageUpdater(messaging as any);
+      // messageId is streaming msg, originId is the start message
+      updater.start('proj', 'inst', 'ch-1', 'streaming-msg', 'start-msg');
+      updater.append('proj', 'inst', 'tool activity');
+
+      await updater.finalize('proj', 'inst', undefined, 'start-msg');
+
+      expect(messaging.updateMessage).toHaveBeenCalledWith('ch-1', 'streaming-msg', 'tool activity');
+      expect(messaging.sendToChannel).toHaveBeenCalledWith('ch-1', '\u2705 Done');
+      expect(updater.has('proj', 'inst')).toBe(false);
+    });
+
+    it('skips finalize when originId does not match expectedMessageId', async () => {
+      const messaging = createMockMessaging();
+      const updater = new StreamingMessageUpdater(messaging as any);
+      updater.start('proj', 'inst', 'ch-1', 'streaming-msg', 'start-msg-1');
+
+      await updater.finalize('proj', 'inst', undefined, 'start-msg-2');
+
+      expect(messaging.sendToChannel).not.toHaveBeenCalled();
       expect(updater.has('proj', 'inst')).toBe(true);
     });
   });

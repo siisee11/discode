@@ -248,14 +248,59 @@ export class DiscordClient implements MessagingClient {
     }>,
     timeoutMs?: number,
   ): Promise<string | null> {
-    const selected = await this.interactions.sendQuestionWithButtons(channelId, questions, timeoutMs);
-    if (selected && this.messageCallback) {
-      const info = this.channels.channelMapping.get(channelId);
-      if (info) {
+    const info = this.channels.channelMapping.get(channelId);
+    let answerCount = 0;
+    const collectedAnswers: Array<{ question: string; answer: string }> = [];
+    const selected = await this.interactions.sendQuestionWithButtons(
+      channelId, questions, timeoutMs,
+      async (answer, optionIndex) => {
+        const qIndex = answerCount;
+        answerCount++;
+        collectedAnswers.push({
+          question: questions[qIndex].header || questions[qIndex].question,
+          answer,
+        });
+        console.log(`🔘 [question-button] answer #${answerCount}/${questions.length}: ${JSON.stringify(answer)} index=${optionIndex} channel=${channelId}`);
+        if (this.messageCallback && info) {
+          // Navigate to correct option using Down arrow keys, then Enter selects it
+          const downArrows = '\x1b[B'.repeat(optionIndex);
+          console.log(`🔘 [question-button] sending ${optionIndex} down arrows to select option`);
+          try {
+            await this.messageCallback(info.agentType, `\x01${downArrows}`, info.projectName, channelId, undefined, info.instanceId);
+          } catch (err) {
+            console.warn('Failed to route question button selection to agent:', err);
+          }
+          // "Give feedback" opens text input in Claude CLI — guide the user
+          if (answer === 'Give feedback') {
+            await this.messaging.sendToChannel(channelId, '✏️ Type your feedback below and it will be sent to Claude.');
+          }
+          // Wait for Claude to process and render next question UI
+          if (answerCount < questions.length) {
+            await new Promise(r => setTimeout(r, 2000));
+          }
+        }
+      },
+    );
+    console.log(`🔘 [question-button] all done: ${answerCount} answers, selected=${JSON.stringify(selected)}`);
+    // Claude CLI shows "Submit answers" / "Cancel" only for multi-question flows.
+    // Single question is confirmed immediately after selection.
+    if (selected && this.messageCallback && info && questions.length > 1) {
+      const shouldSubmit = await this.interactions.sendSubmitConfirmation(channelId, collectedAnswers);
+      await new Promise(r => setTimeout(r, 1500));
+      if (shouldSubmit) {
+        console.log(`🔘 [question-button] submitting answers`);
         try {
-          await this.messageCallback(info.agentType, selected, info.projectName, channelId, undefined, info.instanceId);
+          await this.messageCallback(info.agentType, `\x01`, info.projectName, channelId, undefined, info.instanceId);
         } catch (err) {
-          console.warn('Failed to route question button selection to agent:', err);
+          console.warn('Failed to send Submit answers confirmation:', err);
+        }
+      } else {
+        // Cancel: Down arrow to select "Cancel" option, then Enter
+        console.log(`🔘 [question-button] cancelling answers`);
+        try {
+          await this.messageCallback(info.agentType, `\x01\x1b[B`, info.projectName, channelId, undefined, info.instanceId);
+        } catch (err) {
+          console.warn('Failed to send Cancel:', err);
         }
       }
     }

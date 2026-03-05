@@ -60,7 +60,6 @@ export interface MessagingClient {
     channelId: string,
     toolName: string,
     toolInput: any,
-    timeoutMs?: number,
   ): Promise<boolean>;
 
   sendQuestionWithButtons(
@@ -72,5 +71,6 @@ export interface MessagingClient {
       multiSelect?: boolean;
     }>,
     timeoutMs?: number,
+    onAnswer?: (answer: string, optionIndex: number) => Promise<void>,
   ): Promise<string | null>;
 }

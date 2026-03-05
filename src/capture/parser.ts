@@ -175,7 +175,12 @@ export function splitForSlack(text: string, maxLen: number = 3900): string[] {
 /**
  * File extensions recognised when scanning agent output.
  */
-const FILE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', '.pdf', '.docx', '.pptx', '.xlsx', '.csv', '.json', '.txt'];
+const FILE_EXTENSIONS = [
+  '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp',
+  '.pdf', '.docx', '.pptx', '.xlsx', '.csv',
+  '.json', '.txt', '.md', '.mdx', '.html', '.xml', '.yaml', '.yml', '.toml',
+  '.log', '.zip', '.tar', '.gz',
+];
 
 /**
  * Regex that matches absolute file paths ending with a known file extension.

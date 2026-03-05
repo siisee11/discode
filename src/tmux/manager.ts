@@ -279,6 +279,23 @@ export class TmuxManager {
   }
 
   /**
+   * Send Escape keypresses to a specific window.
+   * Used to cancel the current operation in CLI agents.
+   * Sends 2 presses by default to handle vim mode / overlay dismissal.
+   */
+  sendEscapeToWindow(sessionName: string, windowName: string, paneHint?: string, count: number = 2): void {
+    const target = resolveWindowTarget(this.executor, sessionName, windowName, paneHint);
+    const escapedTarget = escapeShellArg(target);
+    try {
+      for (let i = 0; i < count; i++) {
+        this.executor.exec(`tmux send-keys -t ${escapedTarget} Escape`);
+      }
+    } catch (error) {
+      throw new Error(`Failed to send Escape to window '${windowName}' in session '${sessionName}': ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  /**
    * Capture pane output from a specific window
    * @param sessionName Full session name (already includes prefix)
    */

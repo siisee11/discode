@@ -8,6 +8,7 @@ export interface AgentRuntime {
   sendKeysToWindow(sessionName: string, windowName: string, keys: string, paneHint?: string): void;
   typeKeysToWindow(sessionName: string, windowName: string, keys: string, paneHint?: string): void;
   sendEnterToWindow(sessionName: string, windowName: string, paneHint?: string): void;
+  sendEscapeToWindow?(sessionName: string, windowName: string, paneHint?: string): void;
   listWindows?: (sessionName?: string) => Array<{
     sessionName: string;
     windowName: string;

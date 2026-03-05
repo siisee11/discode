@@ -10,6 +10,7 @@ function createMockTmuxManager() {
     sendKeysToWindow: vi.fn(),
     typeKeysToWindow: vi.fn(),
     sendEnterToWindow: vi.fn(),
+    sendEscapeToWindow: vi.fn(),
     listSessions: vi.fn().mockReturnValue([{ name: 'agent-bridge' }]),
     sessionExistsFull: vi.fn().mockReturnValue(true),
     listWindows: vi.fn().mockReturnValue(['proj-claude', 'proj-gemini']),
@@ -43,10 +44,12 @@ describe('TmuxRuntime', () => {
     runtime.sendKeysToWindow('agent-bridge', 'project-opencode', 'hello', 'opencode');
     runtime.typeKeysToWindow('agent-bridge', 'project-opencode', 'hello', 'opencode');
     runtime.sendEnterToWindow('agent-bridge', 'project-opencode', 'opencode');
+    runtime.sendEscapeToWindow('agent-bridge', 'project-opencode', 'opencode');
 
     expect(tmux.sendKeysToWindow).toHaveBeenCalledWith('agent-bridge', 'project-opencode', 'hello', 'opencode');
     expect(tmux.typeKeysToWindow).toHaveBeenCalledWith('agent-bridge', 'project-opencode', 'hello', 'opencode');
     expect(tmux.sendEnterToWindow).toHaveBeenCalledWith('agent-bridge', 'project-opencode', 'opencode');
+    expect(tmux.sendEscapeToWindow).toHaveBeenCalledWith('agent-bridge', 'project-opencode', 'opencode');
   });
 
   it('provides runtime listing, buffer, and stop methods', () => {

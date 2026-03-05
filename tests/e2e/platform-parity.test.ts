@@ -161,17 +161,20 @@ describe('Multi-Platform Parity', () => {
         text: 'Step 2',
       });
 
-      // Wait long enough for both events to complete
+      // Wait long enough for both events to complete.
+      // The first tool.activity triggers 2 sendToChannelWithId calls:
+      // 1) ensureStartMessage (📝 Prompt) and 2) a separate streaming message (⏳ Working...).
       await waitForCalls(
         ctx.messaging.sendToChannelWithId as ReturnType<typeof vi.fn>,
-        1,
+        2,
       );
       await new Promise((r) => setTimeout(r, 150));
 
-      // Only one start message should be created regardless of activity count
+      // Exactly two sendToChannelWithId calls: start message + streaming message.
+      // The second tool.activity reuses both — no additional calls.
       const withIdCalls = (ctx.messaging.sendToChannelWithId as ReturnType<typeof vi.fn>).mock
         .calls.length;
-      expect(withIdCalls).toBe(1);
+      expect(withIdCalls).toBe(2);
     });
 
     // -----------------------------------------------------------------------

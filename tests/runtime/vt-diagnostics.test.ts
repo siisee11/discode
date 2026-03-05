@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { VtScreen } from '../../src/runtime/vt-screen.js';
+import { buildTerminalResponse } from '../../src/runtime/pty-query-handler.js';
 import { flushClientFrame } from '../../src/runtime/stream-frame-renderer.js';
 import type { RuntimeStreamClientState } from '../../src/runtime/stream-utilities.js';
 import {
@@ -22,6 +23,22 @@ describe('runtime diagnostics metrics', () => {
     expect(getRuntimeMetric('vt_unknown_escape', { next: '#' })).toBeGreaterThan(0);
     expect(getRuntimeMetric('vt_unknown_csi', { final: 'q' })).toBeGreaterThan(0);
   });
+
+  it('tracks PTY query responses and partial carries', () => {
+    resetRuntimeMetrics();
+    const record = {
+      screen: new VtScreen(20, 6),
+      queryCarry: '',
+      privateModes: new Map<number, boolean>(),
+    };
+
+    buildTerminalResponse(record, '\x1b['); // partial escape
+    buildTerminalResponse(record, '6n'); // completes prior CSI and responds
+
+    expect(getRuntimeMetric('pty_query_partial_carry', { kind: 'csi' })).toBeGreaterThan(0);
+    expect(getRuntimeMetric('pty_query_response', { kind: 'csi_6n' })).toBeGreaterThan(0);
+  });
+
 
   it('tracks stream forced flush and coalesced skip', () => {
     resetRuntimeMetrics();

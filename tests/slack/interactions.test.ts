@@ -167,6 +167,158 @@ describe('SlackInteractions', () => {
       const result = await interactions.sendQuestionWithButtons('C001', questions);
       expect(result).toBeNull();
     });
+
+    it('calls onAnswer callback with label and option index', async () => {
+      const questions = [
+        {
+          question: 'Pick a color',
+          options: [
+            { label: 'Red' },
+            { label: 'Blue' },
+            { label: 'Green' },
+          ],
+        },
+      ];
+
+      const onAnswer = vi.fn().mockResolvedValue(undefined);
+      const promise = interactions.sendQuestionWithButtons('C001', questions, undefined, onAnswer);
+
+      await vi.waitFor(() => {
+        expect(app.client.chat.postMessage).toHaveBeenCalledTimes(1);
+      });
+
+      // Find the handler for option index 2 (Green)
+      const optCalls = app.action.mock.calls.filter(
+        (c: any[]) => typeof c[0] === 'string' && c[0].match(/^opt_[a-f0-9]+_\d+$/),
+      );
+      const handler2 = optCalls.find((c: any[]) => c[0].endsWith('_2'))![1];
+      await handler2({
+        action: { value: 'Green' },
+        ack: vi.fn(),
+      });
+
+      const result = await promise;
+      expect(result).toBe('Green');
+      expect(onAnswer).toHaveBeenCalledWith('Green', 2);
+    });
+
+    it('handles sequential multi-question flow with onAnswer', async () => {
+      // For sequential questions, each postMessage call resolves and the action
+      // handler is called in order. We simulate this by queuing mock behaviors.
+      let postCount = 0;
+      app.client.chat.postMessage.mockImplementation(async () => {
+        postCount++;
+        return { ts: `${200 + postCount}.000` };
+      });
+
+      const questions = [
+        { question: 'Q1?', options: [{ label: 'A' }, { label: 'B' }] },
+        { question: 'Q2?', options: [{ label: 'X' }, { label: 'Y' }] },
+      ];
+
+      const answers: Array<{ label: string; index: number }> = [];
+      const onAnswer = vi.fn(async (label: string, index: number) => {
+        answers.push({ label, index });
+      });
+
+      const promise = interactions.sendQuestionWithButtons('C001', questions, undefined, onAnswer);
+
+      // Wait for the first question to be posted
+      await vi.waitFor(() => {
+        expect(app.client.chat.postMessage).toHaveBeenCalledTimes(1);
+      });
+
+      // Select option B (index 1) for Q1
+      const q1Calls = app.action.mock.calls.filter(
+        (c: any[]) => typeof c[0] === 'string' && c[0].match(/^opt_[a-f0-9]+_1$/),
+      );
+      const q1Handler = q1Calls[0][1];
+      await q1Handler({ action: { value: 'B' }, ack: vi.fn() });
+
+      // Wait for second question
+      await vi.waitFor(() => {
+        expect(app.client.chat.postMessage).toHaveBeenCalledTimes(2);
+      });
+
+      // Select option X (index 0) for Q2
+      const q2Calls = app.action.mock.calls.filter(
+        (c: any[]) => typeof c[0] === 'string' && c[0].match(/^opt_[a-f0-9]+_0$/),
+      );
+      // The second _0 handler belongs to Q2
+      const q2Handler = q2Calls[q2Calls.length - 1][1];
+      await q2Handler({ action: { value: 'X' }, ack: vi.fn() });
+
+      const result = await promise;
+      expect(result).toBe('B\nX');
+      expect(onAnswer).toHaveBeenCalledTimes(2);
+      expect(answers[0]).toEqual({ label: 'B', index: 1 });
+      expect(answers[1]).toEqual({ label: 'X', index: 0 });
+    });
+  });
+
+  describe('sendSubmitConfirmation', () => {
+    it('returns true when Submit is clicked', async () => {
+      const summary = [
+        { question: 'Color', answer: 'Red' },
+        { question: 'Size', answer: 'Large' },
+      ];
+
+      const promise = interactions.sendSubmitConfirmation('C001', summary);
+
+      await vi.waitFor(() => {
+        expect(app.client.chat.postMessage).toHaveBeenCalledTimes(1);
+      });
+
+      // Verify message contains summary
+      const call = app.client.chat.postMessage.mock.calls[0][0];
+      expect(call.text).toContain('Submit answers');
+
+      // Find approve handler (submit)
+      const approveCall = app.action.mock.calls.find(
+        (c: any[]) => typeof c[0] === 'string' && c[0].startsWith('approve_'),
+      );
+      expect(approveCall).toBeDefined();
+
+      await approveCall![1]({
+        action: { value: 'submit' },
+        ack: vi.fn(),
+        respond: vi.fn().mockResolvedValue(undefined),
+      });
+
+      expect(await promise).toBe(true);
+    });
+
+    it('returns false when Cancel is clicked', async () => {
+      const summary = [{ question: 'Q', answer: 'A' }];
+
+      const promise = interactions.sendSubmitConfirmation('C001', summary);
+
+      await vi.waitFor(() => {
+        expect(app.client.chat.postMessage).toHaveBeenCalledTimes(1);
+      });
+
+      const denyCall = app.action.mock.calls.find(
+        (c: any[]) => typeof c[0] === 'string' && c[0].startsWith('deny_'),
+      );
+      expect(denyCall).toBeDefined();
+
+      await denyCall![1]({
+        action: { value: 'cancel' },
+        ack: vi.fn(),
+        respond: vi.fn().mockResolvedValue(undefined),
+      });
+
+      expect(await promise).toBe(false);
+    });
+
+    it('returns false when postMessage returns no ts', async () => {
+      app.client.chat.postMessage.mockResolvedValueOnce({ ts: undefined });
+
+      const result = await interactions.sendSubmitConfirmation('C001', [
+        { question: 'Q', answer: 'A' },
+      ]);
+      expect(result).toBe(false);
+    });
   });
 
   describe('pollMissedMessages', () => {

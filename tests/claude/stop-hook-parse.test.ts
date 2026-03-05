@@ -415,6 +415,52 @@ describe('parseTurnTexts', () => {
     expect(result.intermediateText).toBe('');
   });
 
+  it('stops at user message with string content (not array of blocks)', () => {
+    // Claude Code may store message.content as a plain string instead of
+    // an array of content blocks. This must still act as a turn boundary.
+    const tail = [
+      line({ type: 'assistant', message: { id: 'msg_old', content: [{ type: 'text', text: 'Previous response' }] } }),
+      line({ type: 'user', message: { role: 'user', content: 'git status 확인' } }),
+      line({ type: 'assistant', message: { id: 'msg_new', content: [{ type: 'text', text: 'Here is the status' }] } }),
+    ].join('\n');
+
+    const result = parseTurnTexts(tail);
+    expect(result.displayText).toBe('Here is the status');
+    expect(result.turnText).toBe('Here is the status');
+    expect(result.intermediateText).toBe('');
+  });
+
+  it('stops at string-content user message with intermediate text in current turn', () => {
+    const tail = [
+      line({ type: 'assistant', message: { id: 'msg_prev', content: [{ type: 'text', text: 'Old answer' }] } }),
+      line({ type: 'user', message: { role: 'user', content: '빌드해줘' } }),
+      line({ type: 'assistant', message: { id: 'msg_A', content: [{ type: 'text', text: 'Building...' }] } }),
+      line({ type: 'assistant', message: { id: 'msg_A', content: [{ type: 'tool_use', id: 'tu_1', name: 'Bash', input: {} }] } }),
+      line({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'tu_1' }] } }),
+      line({ type: 'assistant', message: { id: 'msg_B', content: [{ type: 'text', text: 'Build complete' }] } }),
+    ].join('\n');
+
+    const result = parseTurnTexts(tail);
+    expect(result.displayText).toBe('Build complete');
+    expect(result.intermediateText).toBe('Building...');
+    // Previous turn text must NOT leak
+    expect(result.turnText).not.toContain('Old answer');
+  });
+
+  it('skips system-injected string-content user message', () => {
+    const tail = [
+      line({ type: 'assistant', message: { id: 'msg_old', content: [{ type: 'text', text: 'Previous' }] } }),
+      line({ type: 'user', message: { role: 'user', content: 'This session is being continued from a previous conversation that ran out of context.' } }),
+      line({ type: 'assistant', message: { id: 'msg_new', content: [{ type: 'text', text: 'Continuing...' }] } }),
+    ].join('\n');
+
+    const result = parseTurnTexts(tail);
+    // Continuation message is system-injected — scanner should pass through it
+    expect(result.displayText).toBe('Continuing...');
+    expect(result.intermediateText).toBe('Previous');
+  });
+
+
   it('handles assistant entry without messageId', () => {
     const tail = line({
       type: 'assistant',

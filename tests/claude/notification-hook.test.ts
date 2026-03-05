@@ -95,8 +95,10 @@ function runHook(env: Record<string, string>, stdinJson: unknown): Promise<{ cal
   });
 }
 
-// Also load functions via VM for unit testing extractPromptFromTranscript
-type ExtractPromptFromTranscriptFn = (transcriptPath: string) => string;
+// Load functions via VM for unit testing extractFromTranscript, extractPromptQuestions
+type ExtractFromTranscriptResult = { promptText: string; promptQuestions: unknown[]; planFilePath: string };
+type ExtractFromTranscriptFn = (transcriptPath: string) => ExtractFromTranscriptResult;
+type ExtractPromptQuestionsFn = (toolUseBlocks: Array<{ name: string; input: Record<string, unknown> }>) => unknown[];
 type FormatPromptTextFn = (toolUseBlocks: Array<{ name: string; input: Record<string, unknown> }>) => string;
 
 function loadHookFunctions() {
@@ -124,12 +126,13 @@ function loadHookFunctions() {
   new Script(src, { filename: 'discode-notification-hook.js' }).runInContext(ctx);
 
   return {
-    extractPromptFromTranscript: (ctx as any).extractPromptFromTranscript as ExtractPromptFromTranscriptFn,
+    extractFromTranscript: (ctx as any).extractFromTranscript as ExtractFromTranscriptFn,
+    extractPromptQuestions: (ctx as any).extractPromptQuestions as ExtractPromptQuestionsFn,
     formatPromptText: (ctx as any).formatPromptText as FormatPromptTextFn,
   };
 }
 
-const { extractPromptFromTranscript, formatPromptText } = loadHookFunctions();
+const { extractFromTranscript, extractPromptQuestions, formatPromptText } = loadHookFunctions();
 
 describe('discode-notification-hook', () => {
   it('posts session.notification event with permission_prompt type', async () => {
@@ -439,7 +442,7 @@ describe('discode-notification-hook', () => {
 
 // ── extractPromptFromTranscript ──────────────────────────────────────
 
-describe('extractPromptFromTranscript', () => {
+describe('extractFromTranscript', () => {
   let tempDir: string;
 
   function setup() {
@@ -456,7 +459,7 @@ describe('extractPromptFromTranscript', () => {
     return filePath;
   }
 
-  it('extracts AskUserQuestion prompt from transcript', () => {
+  it('extracts AskUserQuestion promptText from transcript', () => {
     setup();
     try {
       const fp = writeTranscript([
@@ -485,12 +488,54 @@ describe('extractPromptFromTranscript', () => {
           },
         },
       ]);
-      const result = extractPromptFromTranscript(fp);
-      expect(result).toContain('Which approach do you prefer?');
-      expect(result).toContain('*Fast*');
-      expect(result).toContain('Quick but risky');
-      expect(result).toContain('*Safe*');
-      expect(result).toContain('Slow but reliable');
+      const result = extractFromTranscript(fp);
+      expect(result.promptText).toContain('Which approach do you prefer?');
+      expect(result.promptText).toContain('*Fast*');
+      expect(result.promptText).toContain('Quick but risky');
+      expect(result.promptText).toContain('*Safe*');
+      expect(result.promptText).toContain('Slow but reliable');
+    } finally {
+      teardown();
+    }
+  });
+
+  it('extracts AskUserQuestion promptQuestions as structured objects', () => {
+    setup();
+    try {
+      const fp = writeTranscript([
+        { type: 'user', message: { content: [{ type: 'text', text: 'Help' }] } },
+        {
+          type: 'assistant',
+          message: {
+            id: 'msg_1',
+            content: [
+              {
+                type: 'tool_use',
+                name: 'AskUserQuestion',
+                input: {
+                  questions: [{
+                    header: 'Library',
+                    question: 'Which library?',
+                    options: [
+                      { label: 'React', description: 'UI library' },
+                      { label: 'Vue', description: 'Progressive framework' },
+                    ],
+                  }],
+                },
+              },
+            ],
+          },
+        },
+      ]);
+      const result = extractFromTranscript(fp);
+      expect(result.promptQuestions).toHaveLength(1);
+      const q = result.promptQuestions[0] as any;
+      expect(q.question).toBe('Which library?');
+      expect(q.header).toBe('Library');
+      expect(q.options).toHaveLength(2);
+      expect(q.options[0].label).toBe('React');
+      expect(q.options[0].description).toBe('UI library');
+      expect(q.options[1].label).toBe('Vue');
     } finally {
       teardown();
     }
@@ -512,14 +557,59 @@ describe('extractPromptFromTranscript', () => {
           },
         },
       ]);
-      const result = extractPromptFromTranscript(fp);
-      expect(result).toContain('Plan approval needed');
+      const result = extractFromTranscript(fp);
+      expect(result.promptText).toContain('Plan approval needed');
     } finally {
       teardown();
     }
   });
 
-  it('returns empty string when no tool_use blocks in turn', () => {
+  it('extracts planFilePath from Write tool targeting .claude/plans/', () => {
+    setup();
+    try {
+      const fp = writeTranscript([
+        { type: 'user', message: { content: [{ type: 'text', text: 'Plan this' }] } },
+        {
+          type: 'assistant',
+          message: {
+            id: 'msg_1',
+            content: [
+              { type: 'tool_use', name: 'Write', input: { file_path: '/tmp/project/.claude/plans/my-plan.md', content: '# Plan' } },
+              { type: 'tool_use', name: 'ExitPlanMode', input: {} },
+            ],
+          },
+        },
+      ]);
+      const result = extractFromTranscript(fp);
+      expect(result.planFilePath).toBe('/tmp/project/.claude/plans/my-plan.md');
+    } finally {
+      teardown();
+    }
+  });
+
+  it('returns empty planFilePath when ExitPlanMode is absent', () => {
+    setup();
+    try {
+      const fp = writeTranscript([
+        { type: 'user', message: { content: [{ type: 'text', text: 'Write file' }] } },
+        {
+          type: 'assistant',
+          message: {
+            id: 'msg_1',
+            content: [
+              { type: 'tool_use', name: 'Write', input: { file_path: '/tmp/.claude/plans/plan.md', content: '# Plan' } },
+            ],
+          },
+        },
+      ]);
+      const result = extractFromTranscript(fp);
+      expect(result.planFilePath).toBe('');
+    } finally {
+      teardown();
+    }
+  });
+
+  it('returns empty promptText when no tool_use blocks in turn', () => {
     setup();
     try {
       const fp = writeTranscript([
@@ -529,13 +619,16 @@ describe('extractPromptFromTranscript', () => {
           message: { id: 'msg_1', content: [{ type: 'text', text: 'Hi there' }] },
         },
       ]);
-      expect(extractPromptFromTranscript(fp)).toBe('');
+      const result = extractFromTranscript(fp);
+      expect(result.promptText).toBe('');
+      expect(result.promptQuestions).toHaveLength(0);
+      expect(result.planFilePath).toBe('');
     } finally {
       teardown();
     }
   });
 
-  it('returns empty string when only non-prompt tool_use (Bash, Read, etc.)', () => {
+  it('returns empty promptText when only non-prompt tool_use (Bash, Read, etc.)', () => {
     setup();
     try {
       const fp = writeTranscript([
@@ -551,18 +644,24 @@ describe('extractPromptFromTranscript', () => {
           },
         },
       ]);
-      expect(extractPromptFromTranscript(fp)).toBe('');
+      const result = extractFromTranscript(fp);
+      expect(result.promptText).toBe('');
     } finally {
       teardown();
     }
   });
 
-  it('returns empty string for empty transcript path', () => {
-    expect(extractPromptFromTranscript('')).toBe('');
+  it('returns defaults for empty transcript path', () => {
+    const result = extractFromTranscript('');
+    expect(result.promptText).toBe('');
+    expect(result.promptQuestions).toHaveLength(0);
+    expect(result.planFilePath).toBe('');
   });
 
-  it('returns empty string for non-existent transcript file', () => {
-    expect(extractPromptFromTranscript('/tmp/nonexistent-' + Date.now() + '.jsonl')).toBe('');
+  it('returns defaults for non-existent transcript file', () => {
+    const result = extractFromTranscript('/tmp/nonexistent-' + Date.now() + '.jsonl');
+    expect(result.promptText).toBe('');
+    expect(result.promptQuestions).toHaveLength(0);
   });
 
   it('does not pick up prompt from previous turn', () => {
@@ -588,7 +687,9 @@ describe('extractPromptFromTranscript', () => {
           message: { id: 'msg_new', content: [{ type: 'text', text: 'Thanks!' }] },
         },
       ]);
-      expect(extractPromptFromTranscript(fp)).toBe('');
+      const result = extractFromTranscript(fp);
+      expect(result.promptText).toBe('');
+      expect(result.promptQuestions).toHaveLength(0);
     } finally {
       teardown();
     }
@@ -629,13 +730,99 @@ describe('extractPromptFromTranscript', () => {
           },
         },
       ]);
-      const result = extractPromptFromTranscript(fp);
-      expect(result).toContain('Which option?');
-      expect(result).toContain('*X*');
-      expect(result).toContain('*Y*');
+      const result = extractFromTranscript(fp);
+      expect(result.promptText).toContain('Which option?');
+      expect(result.promptText).toContain('*X*');
+      expect(result.promptText).toContain('*Y*');
+      expect(result.promptQuestions).toHaveLength(1);
     } finally {
       teardown();
     }
+  });
+});
+
+// ── extractPromptQuestions ────────────────────────────────────────────
+
+describe('extractPromptQuestions', () => {
+  it('extracts structured questions from AskUserQuestion blocks', () => {
+    const blocks = [{
+      name: 'AskUserQuestion',
+      input: {
+        questions: [{
+          header: 'Color',
+          question: 'Pick a color',
+          options: [
+            { label: 'Red', description: 'Warm' },
+            { label: 'Blue', description: 'Cool' },
+          ],
+        }],
+      },
+    }];
+    const result = extractPromptQuestions(blocks);
+    expect(result).toHaveLength(1);
+    const q = result[0] as any;
+    expect(q.question).toBe('Pick a color');
+    expect(q.header).toBe('Color');
+    expect(q.options).toHaveLength(2);
+    expect(q.options[0]).toEqual({ label: 'Red', description: 'Warm' });
+    expect(q.options[1]).toEqual({ label: 'Blue', description: 'Cool' });
+  });
+
+  it('preserves multiSelect flag', () => {
+    const blocks = [{
+      name: 'AskUserQuestion',
+      input: {
+        questions: [{
+          question: 'Select features',
+          multiSelect: true,
+          options: [{ label: 'A' }, { label: 'B' }],
+        }],
+      },
+    }];
+    const result = extractPromptQuestions(blocks);
+    expect(result).toHaveLength(1);
+    expect((result[0] as any).multiSelect).toBe(true);
+  });
+
+  it('ignores non-AskUserQuestion blocks', () => {
+    const blocks = [
+      { name: 'Bash', input: { command: 'ls' } },
+      { name: 'ExitPlanMode', input: {} },
+    ];
+    expect(extractPromptQuestions(blocks)).toHaveLength(0);
+  });
+
+  it('skips options without labels', () => {
+    const blocks = [{
+      name: 'AskUserQuestion',
+      input: {
+        questions: [{
+          question: 'Q',
+          options: [
+            { label: 'Valid' },
+            { label: '', description: 'No label' },
+            { description: 'Also no label' },
+          ],
+        }],
+      },
+    }];
+    const result = extractPromptQuestions(blocks);
+    expect(result).toHaveLength(1);
+    expect((result[0] as any).options).toHaveLength(1);
+    expect((result[0] as any).options[0].label).toBe('Valid');
+  });
+
+  it('skips questions with no valid options', () => {
+    const blocks = [{
+      name: 'AskUserQuestion',
+      input: {
+        questions: [{
+          question: 'Q with no options',
+          options: [],
+        }],
+      },
+    }];
+    expect(extractPromptQuestions(blocks)).toHaveLength(0);
   });
 });
 
@@ -749,5 +936,122 @@ describe('notification hook with transcript', () => {
     expect(result.calls).toHaveLength(1);
     const payload = result.calls[0].body as Record<string, unknown>;
     expect(payload.promptText).toBeUndefined();
+  });
+
+  it('includes promptQuestions in payload when transcript has AskUserQuestion', async () => {
+    setup();
+    try {
+      const transcriptPath = join(tempDir, 'transcript.jsonl');
+      writeFileSync(transcriptPath, [
+        JSON.stringify({ type: 'user', message: { content: [{ type: 'text', text: 'Help' }] } }),
+        JSON.stringify({
+          type: 'assistant',
+          message: {
+            id: 'msg_1',
+            content: [
+              {
+                type: 'tool_use',
+                name: 'AskUserQuestion',
+                input: {
+                  questions: [{
+                    header: 'Approach',
+                    question: 'Which approach?',
+                    options: [
+                      { label: 'Fast', description: 'Quick' },
+                      { label: 'Safe', description: 'Reliable' },
+                    ],
+                  }],
+                },
+              },
+            ],
+          },
+        }),
+      ].join('\n'));
+
+      const result = await runHook(
+        { DISCODE_PROJECT: 'proj', DISCODE_PORT: '18470' },
+        {
+          message: 'Question',
+          notification_type: 'idle_prompt',
+          transcript_path: transcriptPath,
+        },
+      );
+
+      expect(result.calls).toHaveLength(1);
+      const payload = result.calls[0].body as Record<string, unknown>;
+      expect(Array.isArray(payload.promptQuestions)).toBe(true);
+      const questions = payload.promptQuestions as any[];
+      expect(questions).toHaveLength(1);
+      expect(questions[0].question).toBe('Which approach?');
+      expect(questions[0].header).toBe('Approach');
+      expect(questions[0].options).toHaveLength(2);
+    } finally {
+      teardown();
+    }
+  });
+
+  it('includes planFilePath in payload when transcript has ExitPlanMode with Write', async () => {
+    setup();
+    try {
+      const transcriptPath = join(tempDir, 'transcript.jsonl');
+      writeFileSync(transcriptPath, [
+        JSON.stringify({ type: 'user', message: { content: [{ type: 'text', text: 'Plan' }] } }),
+        JSON.stringify({
+          type: 'assistant',
+          message: {
+            id: 'msg_1',
+            content: [
+              { type: 'tool_use', name: 'Write', input: { file_path: '/home/user/.claude/plans/feature.md', content: '# Plan' } },
+              { type: 'tool_use', name: 'ExitPlanMode', input: {} },
+            ],
+          },
+        }),
+      ].join('\n'));
+
+      const result = await runHook(
+        { DISCODE_PROJECT: 'proj', DISCODE_PORT: '18470' },
+        {
+          message: 'Plan ready',
+          notification_type: 'idle_prompt',
+          transcript_path: transcriptPath,
+        },
+      );
+
+      expect(result.calls).toHaveLength(1);
+      const payload = result.calls[0].body as Record<string, unknown>;
+      expect(payload.planFilePath).toBe('/home/user/.claude/plans/feature.md');
+    } finally {
+      teardown();
+    }
+  });
+
+  it('omits promptQuestions and planFilePath when not present', async () => {
+    setup();
+    try {
+      const transcriptPath = join(tempDir, 'transcript.jsonl');
+      writeFileSync(transcriptPath, [
+        JSON.stringify({ type: 'user', message: { content: [{ type: 'text', text: 'Hi' }] } }),
+        JSON.stringify({
+          type: 'assistant',
+          message: { id: 'msg_1', content: [{ type: 'text', text: 'Hello' }] },
+        }),
+      ].join('\n'));
+
+      const result = await runHook(
+        { DISCODE_PROJECT: 'proj', DISCODE_PORT: '18470' },
+        {
+          message: 'Idle',
+          notification_type: 'idle_prompt',
+          transcript_path: transcriptPath,
+        },
+      );
+
+      expect(result.calls).toHaveLength(1);
+      const payload = result.calls[0].body as Record<string, unknown>;
+      expect(payload.promptQuestions).toBeUndefined();
+      expect(payload.planFilePath).toBeUndefined();
+    } finally {
+      teardown();
+    }
   });
 });

@@ -11,6 +11,7 @@ import {
   EmbedBuilder,
 } from 'discord.js';
 import type { Client } from 'discord.js';
+import { randomUUID } from 'crypto';
 
 function getEnvInt(name: string, defaultValue: number): number {
   const raw = process.env[name];
@@ -97,13 +98,34 @@ export class DiscordInteractions {
       multiSelect?: boolean;
     }>,
     timeoutMs: number = getEnvInt('DISCODE_QUESTION_TIMEOUT_MS', 300000),
+    onAnswer?: (answer: string, optionIndex: number) => Promise<void>,
   ): Promise<string | null> {
+    if (questions.length === 0) return null;
+
+
     const channel = await this.client.channels.fetch(channelId);
     if (!channel?.isTextBased()) return null;
     const textChannel = channel as TextChannel;
 
-    const q = questions[0];
-    if (!q) return null;
+    // Sequential: send each question one at a time
+    const answers: string[] = [];
+    for (const q of questions) {
+      const result = await this.sendSingleQuestion(textChannel, q, timeoutMs);
+      if (!result) return null; // timed out
+      answers.push(result.label);
+      if (onAnswer) {
+        await onAnswer(result.label, result.index);
+      }
+    }
+    return answers.join('\n');
+  }
+
+  private async sendSingleQuestion(
+    textChannel: TextChannel,
+    q: { question: string; header?: string; options: Array<{ label: string; description?: string }> },
+    timeoutMs: number = getEnvInt('DISCODE_QUESTION_TIMEOUT_MS', 300000),
+  ): Promise<{ label: string; index: number } | null> {
+    const requestId = randomUUID().slice(0, 8);
 
     const embed = new EmbedBuilder()
       .setTitle(`❓ ${q.header || 'Question'}`)
@@ -130,7 +152,7 @@ export class DiscordInteractions {
       }
       row.addComponents(
         new ButtonBuilder()
-          .setCustomId(`opt_${i}`)
+          .setCustomId(`opt_${requestId}_${i}`)
           .setLabel(q.options[i].label.slice(0, 80))
           .setStyle(i === 0 ? ButtonStyle.Primary : ButtonStyle.Secondary)
       );
@@ -149,7 +171,7 @@ export class DiscordInteractions {
         time: timeoutMs,
       });
 
-      const optIndex = parseInt(interaction.customId.split('_')[1]);
+      const optIndex = parseInt(interaction.customId.split('_')[2]);
       const selected = q.options[optIndex]?.label || '';
 
       await interaction.update({
@@ -157,7 +179,7 @@ export class DiscordInteractions {
         components: [],
       });
 
-      return selected;
+      return { label: selected, index: optIndex };
     } catch {
       await message
         .edit({
@@ -166,6 +188,63 @@ export class DiscordInteractions {
         })
         .catch(() => {});
       return null;
+    }
+  }
+
+  async sendSubmitConfirmation(
+    channelId: string,
+    summary: Array<{ question: string; answer: string }>,
+  ): Promise<boolean> {
+    const channel = await this.client.channels.fetch(channelId);
+    if (!channel?.isTextBased()) return false;
+    const textChannel = channel as TextChannel;
+
+    const embed = new EmbedBuilder()
+      .setTitle('\uD83D\uDCCB Submit Answers')
+      .setDescription(
+        summary.map((s) => `**${s.question}**\n${s.answer}`).join('\n\n'),
+      )
+      .setColor(0x5865f2);
+
+    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId('submit')
+        .setLabel('Submit')
+        .setStyle(ButtonStyle.Success),
+      new ButtonBuilder()
+        .setCustomId('cancel')
+        .setLabel('Cancel')
+        .setStyle(ButtonStyle.Danger),
+    );
+
+    const confirmMsg = await textChannel.send({
+      embeds: [embed],
+      components: [row],
+    });
+
+    try {
+      const interaction = await confirmMsg.awaitMessageComponent({
+        componentType: ComponentType.Button,
+        filter: (i) => !i.user.bot,
+        time: getEnvInt('DISCODE_QUESTION_TIMEOUT_MS', 300000),
+      });
+
+      const submitted = interaction.customId === 'submit';
+      await interaction.update({
+        embeds: [embed
+          .setColor(submitted ? 0x57f287 : 0xed4245)
+          .setFooter({ text: submitted ? '\u2705 Submitted' : '\u274C Cancelled' })],
+        components: [],
+      });
+      return submitted;
+    } catch {
+      await confirmMsg
+        .edit({
+          embeds: [embed.setColor(0x95a5a6).setFooter({ text: '⏰ Timed out' })],
+          components: [],
+        })
+        .catch(() => {});
+      return false;
     }
   }
 }

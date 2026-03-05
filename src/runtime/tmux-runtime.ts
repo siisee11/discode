@@ -36,6 +36,10 @@ export class TmuxRuntime implements AgentRuntime {
     this.tmux.sendEnterToWindow(sessionName, windowName, paneHint);
   }
 
+  sendEscapeToWindow(sessionName: string, windowName: string, paneHint?: string): void {
+    this.tmux.sendEscapeToWindow(sessionName, windowName, paneHint);
+  }
+
   listWindows(sessionName?: string): Array<{
     sessionName: string;
     windowName: string;
