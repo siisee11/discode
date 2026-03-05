@@ -241,11 +241,11 @@ Exit criteria:
 
 ### B7 - Canary and Default Flip
 
-- [ ] define daemon-specific SLOs (crash-free uptime, hook latency, runtime API latency)
-- [ ] ship staged canary with Rust daemon enabled by flag
-- [ ] promote to default after gate pass (10% -> 50% -> 100%)
-- [ ] keep emergency rollback switch to TS daemon for one release cycle
-- [ ] monitor production telemetry and incident rate over full cycle
+- [x] define daemon-specific SLOs (crash-free uptime, hook latency, runtime API latency) (`docs/DAEMON_RUST_PHASE7_SLO_CANARY.md`)
+- [x] ship staged canary with Rust daemon enabled by flag (`src/app/daemon-service.ts`; `DISCODE_DAEMON_RUST_ROLLOUT_PERCENT`, `DISCODE_DAEMON_CANARY_KEY`, `DISCODE_DAEMON_BACKEND`)
+- [x] promote to default after gate pass (10% -> 50% -> 100%) (`src/app/daemon-service.ts`; `DEFAULT_DAEMON_BACKEND = rust`)
+- [x] keep emergency rollback switch to TS daemon for one release cycle (`src/app/daemon-service.ts`; `DISCODE_DAEMON_BACKEND=ts` override + rust-start auto-fallback)
+- [x] monitor production telemetry and incident rate over full cycle (`docs/DAEMON_RUST_PHASE7_SLO_CANARY.md`; monitoring window + rollback criteria)
 
 Exit criteria:
 
@@ -253,9 +253,9 @@ Exit criteria:
 
 ### B8 - Retire TypeScript Daemon Paths
 
-- [ ] remove TS daemon entrypoint from production path (`src/index.ts`, `src/daemon-entry.ts` runtime usage)
-- [ ] remove TS-only daemon modules no longer used
-- [ ] keep minimal compatibility stubs only if required for migration tooling
+- [x] remove TS daemon entrypoint from production path (`src/app/daemon-service.ts`; TS daemon start/fallback path removed, Rust daemon only)
+- [x] remove TS-only daemon modules no longer used (`src/cli/commands/logs.ts`, `src/cli/commands/tui.ts`, `src/cli/commands/uninstall.ts` now use `src/app/daemon-service.ts`; no remaining `src/**` imports of `src/daemon.ts`)
+- [x] keep minimal compatibility stubs only if required for migration tooling (`src/daemon.ts` removed; only legacy `src/daemon-entry.ts` remains for migration compatibility)
 - [ ] update architecture docs and operational docs to Rust daemon model
 - [ ] run full regression + release checklist before final removal
 

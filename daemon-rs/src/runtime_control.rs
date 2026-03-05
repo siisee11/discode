@@ -206,6 +206,28 @@ impl RuntimeControl {
         Ok(())
     }
 
+    pub fn ensure_window(
+        &mut self,
+        session_name: &str,
+        window_name: &str,
+        command: &str,
+    ) -> Result<(), RuntimeControlError> {
+        if self
+            .bridge
+            .window_exists(session_name, window_name)
+            .map_err(RuntimeControlError::from)?
+        {
+            self.active_window_id = Some(format!("{session_name}:{window_name}"));
+            return Ok(());
+        }
+
+        self.bridge
+            .start_window(session_name, window_name, command)
+            .map_err(RuntimeControlError::from)?;
+        self.active_window_id = Some(format!("{session_name}:{window_name}"));
+        Ok(())
+    }
+
     pub fn resize_window(
         &mut self,
         window_id: &str,
@@ -392,6 +414,23 @@ impl SidecarBridge {
                 "sessionName": session_name,
                 "windowName": window_name,
                 "keys": keys,
+            }),
+        )?;
+        Ok(())
+    }
+
+    fn start_window(
+        &mut self,
+        session_name: &str,
+        window_name: &str,
+        command: &str,
+    ) -> Result<(), SidecarError> {
+        let _ = self.request_value(
+            "start_window",
+            json!({
+                "sessionName": session_name,
+                "windowName": window_name,
+                "command": command,
             }),
         )?;
         Ok(())

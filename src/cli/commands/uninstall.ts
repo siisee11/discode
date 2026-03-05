@@ -3,7 +3,7 @@ import { existsSync, rmSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { spawnSync, execSync } from 'child_process';
-import { defaultDaemonManager } from '../../daemon.js';
+import { getDaemonStatus, stopDaemon } from '../../app/daemon-service.js';
 import { removeGeminiHook } from '../../gemini/hook-installer.js';
 import { confirmYesNo, isInteractiveShell } from '../common/interactive.js';
 
@@ -55,9 +55,9 @@ export async function uninstallCommand(options: {
 
   console.log(chalk.cyan('\n🧹 Uninstalling Discode\n'));
 
-  const running = await defaultDaemonManager.isRunning();
-  if (running) {
-    if (defaultDaemonManager.stopDaemon()) {
+  const daemonStatus = await getDaemonStatus();
+  if (daemonStatus.running) {
+    if (stopDaemon()) {
       console.log(chalk.green('✅ Daemon stopped'));
     } else {
       console.log(chalk.yellow('⚠️ Daemon appears running but could not be stopped automatically.'));

@@ -194,4 +194,69 @@ describe('RuntimeStreamClient', () => {
       cursorVisible: true,
     });
   });
+
+  it('handles daemon-rs frame-v2 payload and ignores ack/pong', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'discode-stream-client-daemonrs-v2-'));
+    registerCleanup(() => rmSync(dir, { recursive: true, force: true }));
+    const socketPath = join(dir, 'runtime.sock');
+
+    const server = createServer((socket) => {
+      socket.on('data', (chunk) => {
+        const text = chunk.toString('utf8');
+        const lines = text.split('\n').map((line) => line.trim()).filter(Boolean);
+        for (const line of lines) {
+          const msg = JSON.parse(line) as { type?: string };
+          if (msg.type === 'hello') {
+            socket.write(`${JSON.stringify({ type: 'hello', ok: true, streamProtocolVersion: 2 })}\n`);
+          }
+          if (msg.type === 'subscribe') {
+            socket.write(`${JSON.stringify({ type: 'ack', op: 'subscribe', windowId: 'bridge:demo-opencode', streamProtocolVersion: 2 })}\n`);
+            socket.write(`${JSON.stringify({ type: 'pong', id: 'ping-1', streamProtocolVersion: 2 })}\n`);
+            socket.write(`${JSON.stringify({
+              type: 'frame-v2',
+              windowId: 'bridge:demo-opencode',
+              seq: 7,
+              lineCount: 1,
+              lines: [{
+                segments: [{ text: 'v2 frame line', fg: '#ffffff' }],
+              }],
+              cursorRow: 0,
+              cursorCol: 2,
+              cursorVisible: true,
+              streamProtocolVersion: 2,
+            })}\n`);
+          }
+        }
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(socketPath, resolve));
+    registerCleanup(() => server.close());
+
+    const frames: Array<{ firstText: string; seq: number; cursorCol?: number }> = [];
+    const errors: string[] = [];
+    const client = new RuntimeStreamClient(socketPath, {
+      onFrameStyled: (frame) => {
+        frames.push({
+          firstText: frame.lines[0]?.segments[0]?.text || '',
+          seq: frame.seq,
+          cursorCol: frame.cursorCol,
+        });
+      },
+      onError: (error) => errors.push(error),
+    });
+    registerCleanup(() => client.disconnect());
+
+    const connected = await client.connect();
+    expect(connected).toBe(true);
+
+    client.subscribe('bridge:demo-opencode', 120, 40);
+    await waitFor(() => frames.length > 0);
+    expect(frames[0]).toEqual({
+      firstText: 'v2 frame line',
+      seq: 7,
+      cursorCol: 2,
+    });
+    expect(errors).toEqual([]);
+    expect(client.getStreamProtocolVersion()).toBe(2);
+  });
 });

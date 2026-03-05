@@ -1,6 +1,5 @@
 /**
- * Entry point for the daemon process
- * Called by DaemonManager.startDaemon() to run the bridge server in background
+ * Legacy TypeScript daemon entry point retained for migration compatibility.
  */
 
 import { main } from './index.js';

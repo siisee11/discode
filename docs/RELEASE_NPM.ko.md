@@ -42,22 +42,21 @@ npm run pack:release
 산출물:
 
 - 플랫폼 패키지: `dist/release/discode-*`
+- runtime-client 패키지: `dist/release/runtime-client/discode-runtime-client-*`
+- daemon-rs 패키지: `dist/release/daemon/discode-daemon-rs-*`
+- pty-sidecar 패키지: `dist/release/sidecar/discode-pty-sidecar-*`
 - 메타 패키지: `dist/release/npm/discode`
 
-## 4) 플랫폼 패키지 배포
+## 4) 바이너리 패키지 배포
+
+`dist/release/**` 아래의 `package.json`이 있는 패키지 디렉토리를 모두 publish합니다.
+(`dist/release/npm/discode` 메타 패키지는 다음 단계에서 별도로 publish)
 
 ```bash
-npm publish --access public --workspaces=false dist/release/discode-darwin-arm64
-npm publish --access public --workspaces=false dist/release/discode-darwin-x64
-npm publish --access public --workspaces=false dist/release/discode-darwin-x64-baseline
-npm publish --access public --workspaces=false dist/release/discode-linux-arm64
-npm publish --access public --workspaces=false dist/release/discode-linux-arm64-musl
-npm publish --access public --workspaces=false dist/release/discode-linux-x64
-npm publish --access public --workspaces=false dist/release/discode-linux-x64-baseline
-npm publish --access public --workspaces=false dist/release/discode-linux-x64-baseline-musl
-npm publish --access public --workspaces=false dist/release/discode-linux-x64-musl
-npm publish --access public --workspaces=false dist/release/discode-windows-x64
-npm publish --access public --workspaces=false dist/release/discode-windows-x64-baseline
+find dist/release -name package.json -not -path "*/npm/discode/*" | while read -r pkg; do
+  dir="$(dirname "$pkg")"
+  npm publish --access public --workspaces=false "$dir"
+done
 ```
 
 ## 5) 메타 패키지 배포
@@ -72,6 +71,9 @@ npm publish --access public --workspaces=false dist/release/npm/discode
 npm view @siisee11/discode version
 npm view @siisee11/discode-darwin-arm64 version
 npm view @siisee11/discode-linux-x64 version
+npm view @siisee11/discode-runtime-client-darwin-arm64 version
+npm view @siisee11/discode-daemon-rs-darwin-arm64 version
+npm view @siisee11/discode-pty-sidecar-darwin-arm64 version
 ```
 
 설치 확인:

@@ -65,18 +65,43 @@ const mocks = vi.hoisted(() => {
     return instance;
   });
 
-  const defaultDaemonManager = {
-    getPort: vi.fn().mockReturnValue(18470),
-    isRunning: vi.fn().mockResolvedValue(false),
-    startDaemon: vi.fn().mockReturnValue(123),
-    waitForReady: vi.fn().mockResolvedValue(true),
+  const daemonService = {
+    ensureDaemonRunning: vi.fn().mockResolvedValue({
+      alreadyRunning: false,
+      ready: true,
+      port: 18470,
+      logFile: '/tmp/daemon.log',
+      backend: 'rust',
+    }),
+    getDaemonStatus: vi.fn().mockResolvedValue({
+      running: false,
+      port: 18470,
+      logFile: '/tmp/daemon.log',
+      pidFile: '/tmp/daemon.pid',
+      backend: 'rust',
+    }),
+    restartDaemonIfRunning: vi.fn().mockResolvedValue({
+      restarted: false,
+      ready: false,
+      port: 18470,
+      logFile: '/tmp/daemon.log',
+      backend: 'rust',
+    }),
     stopDaemon: vi.fn().mockReturnValue(true),
-    getLogFile: vi.fn().mockReturnValue('/tmp/daemon.log'),
-    getPidFile: vi.fn().mockReturnValue('/tmp/daemon.pid'),
   };
 
+  const runtimeApi = {
+    runtimeApiRequest: vi.fn().mockResolvedValue({ status: 200, body: 'OK' }),
+    listRuntimeWindows: vi.fn().mockResolvedValue({
+      activeWindowId: undefined,
+      windows: [],
+    }),
+  };
+
+  const tuiCommand = vi.fn().mockResolvedValue(undefined);
+
   const execSync = vi.fn();
-  const spawnSync = vi.fn().mockReturnValue({ status: 0, error: undefined });
+  const spawnSync = vi.fn().mockReturnValue({ status: null, error: new Error('spawn ENOENT') });
 
   return {
     stateManager,
@@ -87,7 +112,9 @@ const mocks = vi.hoisted(() => {
     TmuxManager,
     AgentBridge,
     bridgeInstances,
-    defaultDaemonManager,
+    daemonService,
+    runtimeApi,
+    tuiCommand,
     execSync,
     spawnSync,
   };
@@ -117,8 +144,20 @@ vi.mock('../src/agents/index.js', () => ({
   agentRegistry: mocks.agentRegistry,
 }));
 
-vi.mock('../src/daemon.js', () => ({
-  defaultDaemonManager: mocks.defaultDaemonManager,
+vi.mock('../src/app/daemon-service.js', () => ({
+  ensureDaemonRunning: mocks.daemonService.ensureDaemonRunning,
+  getDaemonStatus: mocks.daemonService.getDaemonStatus,
+  restartDaemonIfRunning: mocks.daemonService.restartDaemonIfRunning,
+  stopDaemon: mocks.daemonService.stopDaemon,
+}));
+
+vi.mock('../src/cli/common/runtime-api.js', () => ({
+  runtimeApiRequest: mocks.runtimeApi.runtimeApiRequest,
+  listRuntimeWindows: mocks.runtimeApi.listRuntimeWindows,
+}));
+
+vi.mock('../src/cli/commands/tui.js', () => ({
+  tuiCommand: mocks.tuiCommand,
 }));
 
 vi.mock('../src/discord/client.js', () => ({
@@ -187,7 +226,19 @@ describe('CLI flow safety (stage 1)', () => {
     mocks.stateManager.getGuildId.mockReturnValue('guild-1');
     mocks.tmux.sessionExistsFull.mockReturnValue(true);
     mocks.tmux.windowExists.mockReturnValue(true);
-    mocks.defaultDaemonManager.isRunning.mockResolvedValue(false);
+    delete (mocks.config as { runtimeMode?: string }).runtimeMode;
+    mocks.runtimeApi.runtimeApiRequest.mockResolvedValue({ status: 200, body: 'OK' });
+    mocks.runtimeApi.listRuntimeWindows.mockResolvedValue({
+      activeWindowId: undefined,
+      windows: [],
+    });
+    mocks.daemonService.ensureDaemonRunning.mockResolvedValue({
+      alreadyRunning: false,
+      ready: true,
+      port: 18470,
+      logFile: '/tmp/daemon.log',
+      backend: 'rust',
+    });
   });
 
   it('new: starts daemon and sets up a new instance', async () => {
@@ -195,7 +246,7 @@ describe('CLI flow safety (stage 1)', () => {
 
     await mod.newCommand('claude', { name: 'demo', attach: false });
 
-    expect(mocks.defaultDaemonManager.startDaemon).toHaveBeenCalledOnce();
+    expect(mocks.daemonService.ensureDaemonRunning).toHaveBeenCalledOnce();
     expect(mocks.AgentBridge).toHaveBeenCalledOnce();
 
     const bridge = mocks.bridgeInstances[0];
@@ -296,5 +347,138 @@ describe('CLI flow safety (stage 1)', () => {
     exitSpy.mockRestore();
     errorSpy.mockRestore();
     logSpy.mockRestore();
+  });
+
+  it('attach (pty-rust): retries runtime focus before opening tui', async () => {
+    const mod = await import('../bin/discode.ts');
+    const project = {
+      projectName: 'demo',
+      projectPath: '/work/demo',
+      tmuxSession: 'agent-bridge',
+      createdAt: new Date(),
+      lastActive: new Date(),
+      agents: { claude: true },
+      discordChannels: { claude: 'ch-1' },
+      instances: {
+        claude: { instanceId: 'claude', agentType: 'claude', tmuxWindow: 'demo-claude', channelId: 'ch-1' },
+      },
+    };
+    mocks.config.runtimeMode = 'pty-rust';
+    mocks.stateManager.getProject.mockReturnValue(project);
+    const focusStatuses = [404, 404, 200];
+    mocks.runtimeApi.runtimeApiRequest.mockImplementation(async (params: { path: string }) => {
+      if (params.path === '/runtime/focus') {
+        const status = focusStatuses.shift() ?? 404;
+        return { status, body: status === 200 ? 'OK' : 'Window not found' };
+      }
+      if (params.path === '/runtime/ensure') {
+        return { status: 200, body: 'OK' };
+      }
+      return { status: 200, body: 'OK' };
+    });
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    await mod.attachCommand('demo', { instance: 'claude' });
+
+    const runtimeCalls = mocks.runtimeApi.runtimeApiRequest.mock.calls.map((call) => call[0] as { path: string });
+    const focusCalls = runtimeCalls.filter((call) => call.path === '/runtime/focus');
+    const ensureCalls = runtimeCalls.filter((call) => call.path === '/runtime/ensure');
+    expect(ensureCalls).toHaveLength(1);
+    expect(focusCalls).toHaveLength(3);
+    expect(mocks.tuiCommand).toHaveBeenCalledOnce();
+    expect(logSpy).not.toHaveBeenCalledWith(expect.stringContaining('Could not focus runtime window'));
+    logSpy.mockRestore();
+  });
+
+  it('attach (pty-rust): uses native attach when enabled and available', async () => {
+    const mod = await import('../bin/discode.ts');
+    const project = {
+      projectName: 'demo',
+      projectPath: '/work/demo',
+      tmuxSession: 'agent-bridge',
+      createdAt: new Date(),
+      lastActive: new Date(),
+      agents: { claude: true },
+      discordChannels: { claude: 'ch-1' },
+      instances: {
+        claude: { instanceId: 'claude', agentType: 'claude', tmuxWindow: 'demo-claude', channelId: 'ch-1' },
+      },
+    };
+    const oldNative = process.env.DISCODE_NATIVE_ATTACH;
+    process.env.DISCODE_NATIVE_ATTACH = '1';
+    mocks.config.runtimeMode = 'pty-rust';
+    mocks.stateManager.getProject.mockReturnValue(project);
+    mocks.spawnSync.mockReturnValueOnce({ status: 0, error: undefined });
+
+    await mod.attachCommand('demo', { instance: 'claude' });
+
+    expect(mocks.spawnSync).toHaveBeenCalledOnce();
+    expect(mocks.tuiCommand).not.toHaveBeenCalled();
+    if (oldNative === undefined) delete process.env.DISCODE_NATIVE_ATTACH;
+    else process.env.DISCODE_NATIVE_ATTACH = oldNative;
+  });
+
+  it('attach (pty-rust): uses native attach in auto mode with explicit runtime client binary', async () => {
+    const mod = await import('../bin/discode.ts');
+    const project = {
+      projectName: 'demo',
+      projectPath: '/work/demo',
+      tmuxSession: 'agent-bridge',
+      createdAt: new Date(),
+      lastActive: new Date(),
+      agents: { claude: true },
+      discordChannels: { claude: 'ch-1' },
+      instances: {
+        claude: { instanceId: 'claude', agentType: 'claude', tmuxWindow: 'demo-claude', channelId: 'ch-1' },
+      },
+    };
+    const oldNative = process.env.DISCODE_NATIVE_ATTACH;
+    const oldBin = process.env.DISCODE_RUNTIME_CLIENT_BIN;
+    delete process.env.DISCODE_NATIVE_ATTACH;
+    process.env.DISCODE_RUNTIME_CLIENT_BIN = '/tmp/discode-runtime-client-test';
+    mocks.config.runtimeMode = 'pty-rust';
+    mocks.stateManager.getProject.mockReturnValue(project);
+    mocks.spawnSync.mockReturnValueOnce({ status: 0, error: undefined });
+
+    await mod.attachCommand('demo', { instance: 'claude' });
+
+    expect(mocks.spawnSync).toHaveBeenCalledWith(
+      '/tmp/discode-runtime-client-test',
+      ['--socket', expect.any(String), '--window-id', 'agent-bridge:demo-claude', '--daemon-port', '18470'],
+      { stdio: 'inherit' },
+    );
+    expect(mocks.tuiCommand).not.toHaveBeenCalled();
+    if (oldNative === undefined) delete process.env.DISCODE_NATIVE_ATTACH;
+    else process.env.DISCODE_NATIVE_ATTACH = oldNative;
+    if (oldBin === undefined) delete process.env.DISCODE_RUNTIME_CLIENT_BIN;
+    else process.env.DISCODE_RUNTIME_CLIENT_BIN = oldBin;
+  });
+
+  it('attach (pty-rust): falls back to tui when native attach exits non-zero', async () => {
+    const mod = await import('../bin/discode.ts');
+    const project = {
+      projectName: 'demo',
+      projectPath: '/work/demo',
+      tmuxSession: 'agent-bridge',
+      createdAt: new Date(),
+      lastActive: new Date(),
+      agents: { claude: true },
+      discordChannels: { claude: 'ch-1' },
+      instances: {
+        claude: { instanceId: 'claude', agentType: 'claude', tmuxWindow: 'demo-claude', channelId: 'ch-1' },
+      },
+    };
+    const oldNative = process.env.DISCODE_NATIVE_ATTACH;
+    process.env.DISCODE_NATIVE_ATTACH = '1';
+    mocks.config.runtimeMode = 'pty-rust';
+    mocks.stateManager.getProject.mockReturnValue(project);
+    mocks.spawnSync.mockReturnValueOnce({ status: 1, error: undefined });
+
+    await mod.attachCommand('demo', { instance: 'claude' });
+
+    expect(mocks.spawnSync).toHaveBeenCalledOnce();
+    expect(mocks.tuiCommand).toHaveBeenCalledOnce();
+    if (oldNative === undefined) delete process.env.DISCODE_NATIVE_ATTACH;
+    else process.env.DISCODE_NATIVE_ATTACH = oldNative;
   });
 });

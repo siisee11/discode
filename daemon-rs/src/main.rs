@@ -336,6 +336,10 @@ fn command_status(opts: &CliOptions) -> Result<(), String> {
     }
     println!("   Log: {}", log_path.display());
     println!("   PID: {}", pid_path.display());
+    println!(
+        "   Runtime Stream Protocol: {}",
+        runtime_stream::RUNTIME_STREAM_PROTOCOL_MAX_SUPPORTED_VERSION
+    );
 
     Ok(())
 }

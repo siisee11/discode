@@ -378,7 +378,7 @@ bun run dev            # Dev mode
 ### Release Packaging (prebuilt binaries)
 
 ```bash
-npm run build:release              # Build platform binaries + npm meta package
+npm run build:release              # Build CLI/daemon/sidecar/runtime-client binaries + npm meta package
 npm run build:release:binaries:single  # Build only current OS/arch binary
 npm run pack:release               # Create npm tarballs in dist/release
 ```

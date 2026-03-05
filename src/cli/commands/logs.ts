@@ -1,10 +1,10 @@
 import { existsSync } from 'fs';
 import { spawn } from 'child_process';
 import chalk from 'chalk';
-import { defaultDaemonManager } from '../../daemon.js';
+import { getDaemonLogFilePath } from '../../app/daemon-service.js';
 
 export function logsCommand(options: { follow?: boolean; lines?: number }): void {
-  const logFile = defaultDaemonManager.getLogFile();
+  const logFile = getDaemonLogFilePath();
 
   if (!existsSync(logFile)) {
     console.log(chalk.yellow('No daemon log found. Start daemon first: discode daemon start'));

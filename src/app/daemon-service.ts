@@ -2,9 +2,8 @@ import { spawnSync } from 'child_process';
 import { existsSync } from 'fs';
 import { arch as osArch, homedir, platform as osPlatform } from 'os';
 import { resolve } from 'path';
-import { defaultDaemonManager } from '../daemon.js';
 
-export type DaemonBackend = 'ts' | 'rust';
+export type DaemonBackend = 'rust';
 
 type RustDaemonStatus = {
   running: boolean;
@@ -19,9 +18,28 @@ type RustCommandResult = {
   binaryPath: string | null;
 };
 
-const DEFAULT_DAEMON_BACKEND: DaemonBackend = 'ts';
-const DAEMON_STATE_DIR = process.env.DISCODE_STATE_DIR || resolve(homedir(), '.discode');
+const DEFAULT_DAEMON_BACKEND: DaemonBackend = 'rust';
+const DEFAULT_DAEMON_PORT = 18470;
 const RUST_DAEMON_TIMEOUT_MS = 5000;
+
+function getDaemonStateDir(): string {
+  return process.env.DISCODE_STATE_DIR || resolve(homedir(), '.discode');
+}
+
+export function getDaemonPort(): number {
+  const raw = process.env.HOOK_SERVER_PORT?.trim();
+  if (!raw) return DEFAULT_DAEMON_PORT;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_DAEMON_PORT;
+}
+
+export function getDaemonLogFilePath(): string {
+  return resolve(getDaemonStateDir(), 'daemon.log');
+}
+
+export function getDaemonPidFilePath(): string {
+  return resolve(getDaemonStateDir(), 'daemon.pid');
+}
 
 export type EnsureDaemonRunningResult = {
   alreadyRunning: boolean;
@@ -29,27 +47,11 @@ export type EnsureDaemonRunningResult = {
   port: number;
   logFile: string;
   backend: DaemonBackend;
-  fallbackFromRust?: boolean;
   fallbackReason?: string;
 };
 
 export async function ensureDaemonRunning(): Promise<EnsureDaemonRunningResult> {
-  const preferredBackend = getConfiguredDaemonBackend();
-  if (preferredBackend === 'rust') {
-    const rustResult = ensureRustDaemonRunning();
-    if (rustResult.ready) {
-      return rustResult;
-    }
-
-    const tsFallback = await ensureTsDaemonRunning();
-    return {
-      ...tsFallback,
-      fallbackFromRust: true,
-      fallbackReason: rustResult.fallbackReason || 'Rust daemon unavailable',
-    };
-  }
-
-  return ensureTsDaemonRunning();
+  return ensureRustDaemonRunning();
 }
 
 export async function getDaemonStatus(): Promise<{
@@ -57,45 +59,18 @@ export async function getDaemonStatus(): Promise<{
   port: number;
   logFile: string;
   pidFile: string;
+  runtimeStreamProtocolVersion?: number;
   backend: DaemonBackend;
 }> {
-  const preferredBackend = getConfiguredDaemonBackend();
-  const order: DaemonBackend[] = preferredBackend === 'rust' ? ['rust', 'ts'] : ['ts', 'rust'];
-  const statusByBackend = {
-    ts: await getTsDaemonStatus(),
-    rust: getRustDaemonStatus(),
-  };
-
-  for (const backend of order) {
-    const status = statusByBackend[backend];
-    if (status.running) {
-      return {
-        ...status,
-        backend,
-      };
-    }
-  }
-
-  const selected = statusByBackend[order[0]];
+  const selected = getRustDaemonStatus();
   return {
     ...selected,
-    backend: order[0],
+    backend: DEFAULT_DAEMON_BACKEND,
   };
 }
 
 export function stopDaemon(): boolean {
-  const preferredBackend = getConfiguredDaemonBackend();
-  const order: DaemonBackend[] = preferredBackend === 'rust' ? ['rust', 'ts'] : ['ts', 'rust'];
-
-  for (const backend of order) {
-    if (backend === 'rust') {
-      if (stopRustDaemon()) return true;
-      continue;
-    }
-    if (defaultDaemonManager.stopDaemon()) return true;
-  }
-
-  return false;
+  return stopRustDaemon();
 }
 
 export async function restartDaemonIfRunning(): Promise<{
@@ -137,65 +112,8 @@ export async function restartDaemonIfRunning(): Promise<{
   };
 }
 
-async function ensureTsDaemonRunning(): Promise<EnsureDaemonRunningResult> {
-  const port = defaultDaemonManager.getPort();
-  const logFile = defaultDaemonManager.getLogFile();
-  const running = await defaultDaemonManager.isRunning();
-
-  if (running) {
-    return {
-      alreadyRunning: true,
-      ready: true,
-      port,
-      logFile,
-      backend: 'ts',
-    };
-  }
-
-  const repoHints = [process.env.DISCODE_REPO, process.cwd()].filter(
-    (value): value is string => !!value && value.length > 0,
-  );
-
-  const entryPointCandidates = [
-    ...repoHints.map((root) => resolve(root, 'dist/src/daemon-entry.js')),
-    ...repoHints.map((root) => resolve(root, 'dist/daemon-entry.js')),
-    resolve(import.meta.dirname, '../src/daemon-entry.js'),
-    resolve(import.meta.dirname, '../daemon-entry.js'),
-    ...repoHints.map((root) => resolve(root, 'src/daemon-entry.ts')),
-    resolve(import.meta.dirname, '../daemon-entry.ts'),
-    resolve(import.meta.dirname, '../src/daemon-entry.ts'),
-  ];
-  const entryPoint =
-    entryPointCandidates.find((candidate) => existsSync(candidate)) ?? entryPointCandidates[0];
-  defaultDaemonManager.startDaemon(entryPoint);
-  const ready = await defaultDaemonManager.waitForReady();
-
-  return {
-    alreadyRunning: false,
-    ready,
-    port,
-    logFile,
-    backend: 'ts',
-  };
-}
-
-async function getTsDaemonStatus(): Promise<{
-  running: boolean;
-  port: number;
-  logFile: string;
-  pidFile: string;
-}> {
-  const running = await defaultDaemonManager.isRunning();
-  return {
-    running,
-    port: defaultDaemonManager.getPort(),
-    logFile: defaultDaemonManager.getLogFile(),
-    pidFile: defaultDaemonManager.getPidFile(),
-  };
-}
-
 function ensureRustDaemonRunning(): EnsureDaemonRunningResult {
-  const port = defaultDaemonManager.getPort();
+  const port = getDaemonPort();
   const before = getRustDaemonStatus();
   if (before.running) {
     return {
@@ -230,13 +148,17 @@ function ensureRustDaemonRunning(): EnsureDaemonRunningResult {
   };
 }
 
-function getRustDaemonStatus(): RustDaemonStatus & { port: number; pidFile: string } {
+function getRustDaemonStatus(): RustDaemonStatus & {
+  port: number;
+  pidFile: string;
+  runtimeStreamProtocolVersion?: number;
+} {
   const command = runRustDaemonCommand('status');
-  const port = defaultDaemonManager.getPort();
+  const port = getDaemonPort();
   const defaults = {
     running: false,
-    logFile: defaultDaemonManager.getLogFile(),
-    pidFile: defaultDaemonManager.getPidFile(),
+    logFile: getDaemonLogFilePath(),
+    pidFile: getDaemonPidFilePath(),
     port,
   };
 
@@ -247,13 +169,21 @@ function getRustDaemonStatus(): RustDaemonStatus & { port: number; pidFile: stri
   const running = /Daemon running/i.test(command.stdout);
   const logFile = command.stdout.match(/^\s*Log:\s*(.+)$/m)?.[1]?.trim() || defaults.logFile;
   const pidFile = command.stdout.match(/^\s*PID:\s*(.+)$/m)?.[1]?.trim() || defaults.pidFile;
+  const parsedProtocolVersion = command.stdout.match(/^\s*Runtime Stream Protocol:\s*(\d+)\s*$/m)?.[1];
+  const runtimeStreamProtocolVersion = parsedProtocolVersion
+    ? Number.parseInt(parsedProtocolVersion, 10)
+    : undefined;
 
-  return {
+  const result: RustDaemonStatus & { port: number; pidFile: string; runtimeStreamProtocolVersion?: number } = {
     running,
     logFile,
     pidFile,
     port,
   };
+  if (Number.isFinite(runtimeStreamProtocolVersion)) {
+    result.runtimeStreamProtocolVersion = runtimeStreamProtocolVersion;
+  }
+  return result;
 }
 
 function stopRustDaemon(): boolean {
@@ -273,7 +203,8 @@ function runRustDaemonCommand(action: 'start' | 'stop' | 'status' | 'restart'): 
     };
   }
 
-  const port = defaultDaemonManager.getPort();
+  const port = getDaemonPort();
+  const stateDir = getDaemonStateDir();
   const result = spawnSync(
     binaryPath,
     [
@@ -281,7 +212,7 @@ function runRustDaemonCommand(action: 'start' | 'stop' | 'status' | 'restart'): 
       '--port',
       String(port),
       '--state-dir',
-      DAEMON_STATE_DIR,
+      stateDir,
       '--timeout-ms',
       String(RUST_DAEMON_TIMEOUT_MS),
     ],
@@ -304,7 +235,9 @@ function runRustDaemonCommand(action: 'start' | 'stop' | 'status' | 'restart'): 
 }
 
 function buildRustFallbackReason(command: RustCommandResult): string {
-  if (!command.binaryPath) return 'Rust daemon binary not found';
+  if (!command.binaryPath) {
+    return 'Rust daemon binary not found (set DISCODE_DAEMON_RS_BIN or build daemon-rs)';
+  }
   const details = [command.stderr, command.stdout]
     .map((part) => part.trim())
     .filter((part) => part.length > 0)
@@ -313,29 +246,40 @@ function buildRustFallbackReason(command: RustCommandResult): string {
   return `Rust daemon start failed: ${details}`;
 }
 
-function getConfiguredDaemonBackend(): DaemonBackend {
-  const raw = process.env.DISCODE_DAEMON_BACKEND?.trim().toLowerCase();
-  if (raw === 'rust') return 'rust';
-  return DEFAULT_DAEMON_BACKEND;
-}
-
 function resolveRustDaemonBinaryPath(): string | null {
   const binaryName = osPlatform() === 'win32' ? 'discode-daemon-rs.exe' : 'discode-daemon-rs';
 
   const archTag = mapArchTag(osArch());
   const platformTag = mapPlatformTag(osPlatform());
-  const repoHints = [process.env.DISCODE_REPO, process.cwd()].filter(
-    (value): value is string => !!value && value.length > 0,
-  );
+  const rawHints = [
+    process.env.DISCODE_REPO,
+    process.cwd(),
+    resolve(import.meta.dirname, '..', '..'),
+    resolve(import.meta.dirname, '..', '..', '..'),
+  ].filter((value): value is string => !!value && value.length > 0);
+  const repoHints = [...new Set(rawHints.map((value) => resolve(value)))];
 
   const candidates = [
     process.env.DISCODE_DAEMON_RS_BIN,
     ...repoHints.map((root) => resolve(root, 'daemon-rs', 'target', 'release', binaryName)),
+    ...repoHints.map((root) => resolve(root, 'daemon-rs', 'target', 'debug', binaryName)),
     ...(platformTag && archTag
       ? repoHints.map((root) =>
           resolve(
             root,
             'dist',
+            'release',
+            'daemon',
+            `discode-daemon-rs-${platformTag}-${archTag}`,
+            'bin',
+            binaryName,
+          ),
+        )
+      : []),
+    ...(platformTag && archTag
+      ? repoHints.map((root) =>
+          resolve(
+            root,
             'release',
             'daemon',
             `discode-daemon-rs-${platformTag}-${archTag}`,

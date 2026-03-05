@@ -1,4 +1,8 @@
+import { spawnSync } from 'child_process';
+import { existsSync } from 'fs';
+import { homedir } from 'os';
 import { basename } from 'path';
+import { resolve, join } from 'path';
 import chalk from 'chalk';
 import { stateManager } from '../../state/index.js';
 import { config } from '../../config/index.js';
@@ -11,11 +15,16 @@ import {
   ensureTmuxInstalled,
   resolveProjectWindowName,
 } from '../common/tmux.js';
-import { ensureRuntimeWindow, focusRuntimeWindow } from '../common/runtime-api.js';
+import { listRuntimeWindows, runtimeApiRequest } from '../common/runtime-api.js';
+import { getDefaultRuntimeSocketPath } from '../common/runtime-stream-client.js';
 import { isPtyRuntimeMode } from '../../runtime/mode.js';
 
 const RUNTIME_FOCUS_RETRY_ATTEMPTS = 6;
 const RUNTIME_FOCUS_RETRY_DELAY_MS = 120;
+const RUNTIME_TRACE_PREFIX = '[runtime-focus]';
+const NATIVE_ATTACH_FLAG_ENV = 'DISCODE_NATIVE_ATTACH';
+const NATIVE_ATTACH_BIN_ENV = 'DISCODE_RUNTIME_CLIENT_BIN';
+type NativeAttachMode = 'off' | 'on' | 'auto';
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -28,27 +37,217 @@ async function focusRuntimeWindowWithRetry(params: {
   instanceId?: string;
   permissionAllow?: boolean;
 }): Promise<boolean> {
-  if (await focusRuntimeWindow(params.port, params.windowId)) {
+  console.log(chalk.gray(
+    `   ${RUNTIME_TRACE_PREFIX} target=${params.windowId} port=${params.port} project=${params.projectName} instance=${params.instanceId || '(auto)'}`,
+  ));
+  await logRuntimeWindowsSnapshot(params.port, 'before-focus', params.windowId);
+
+  const firstFocus = await runtimePostTrace({
+    port: params.port,
+    path: '/runtime/focus',
+    payload: { windowId: params.windowId },
+  });
+  logRuntimeTrace('focus[initial]', firstFocus);
+  if (firstFocus.ok) {
     return true;
   }
 
-  await ensureRuntimeWindow({
+  const ensureTrace = await runtimePostTrace({
     port: params.port,
-    projectName: params.projectName,
-    instanceId: params.instanceId,
-    permissionAllow: params.permissionAllow,
+    path: '/runtime/ensure',
+    payload: {
+      projectName: params.projectName,
+      ...(params.instanceId ? { instanceId: params.instanceId } : {}),
+      ...(params.permissionAllow ? { permissionAllow: true } : {}),
+    },
   });
+  logRuntimeTrace('ensure', ensureTrace);
+  await logRuntimeWindowsSnapshot(params.port, 'after-ensure', params.windowId);
 
   for (let attempt = 0; attempt < RUNTIME_FOCUS_RETRY_ATTEMPTS; attempt += 1) {
-    if (await focusRuntimeWindow(params.port, params.windowId)) {
+    const focusTrace = await runtimePostTrace({
+      port: params.port,
+      path: '/runtime/focus',
+      payload: { windowId: params.windowId },
+    });
+    logRuntimeTrace(`focus[retry-${attempt + 1}]`, focusTrace);
+    if (focusTrace.ok) {
       return true;
     }
+    await logRuntimeWindowsSnapshot(params.port, `after-focus-retry-${attempt + 1}`, params.windowId);
     if (attempt < RUNTIME_FOCUS_RETRY_ATTEMPTS - 1) {
       await sleep(RUNTIME_FOCUS_RETRY_DELAY_MS);
     }
   }
 
   return false;
+}
+
+type RuntimePostTrace = {
+  ok: boolean;
+  status: number;
+  body: string;
+  error?: string;
+};
+
+async function runtimePostTrace(params: {
+  port: number;
+  path: string;
+  payload: unknown;
+}): Promise<RuntimePostTrace> {
+  try {
+    const response = await runtimeApiRequest({
+      port: params.port,
+      method: 'POST',
+      path: params.path,
+      payload: params.payload,
+    });
+    return {
+      ok: response.status === 200,
+      status: response.status,
+      body: response.body,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      status: 0,
+      body: '',
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+function summarizeRuntimeBody(body: string): string {
+  const trimmed = body.trim();
+  if (trimmed.length === 0) return '(empty)';
+  if (trimmed.length <= 220) return trimmed;
+  return `${trimmed.slice(0, 220)}...`;
+}
+
+function logRuntimeTrace(label: string, trace: RuntimePostTrace): void {
+  const detail = `status=${trace.status} ok=${trace.ok} body=${JSON.stringify(summarizeRuntimeBody(trace.body))}`;
+  if (trace.error) {
+    console.log(chalk.gray(`   ${RUNTIME_TRACE_PREFIX} ${label}: ${detail} error=${trace.error}`));
+    return;
+  }
+  console.log(chalk.gray(`   ${RUNTIME_TRACE_PREFIX} ${label}: ${detail}`));
+}
+
+function resolveNativeAttachMode(): NativeAttachMode {
+  const raw = process.env[NATIVE_ATTACH_FLAG_ENV]?.trim().toLowerCase();
+  if (!raw) return 'auto';
+  if (raw === '0' || raw === 'false' || raw === 'off') return 'off';
+  if (raw === 'auto') return 'auto';
+  return 'on';
+}
+
+function mapPlatformTag(platform: NodeJS.Platform): 'darwin' | 'linux' | 'windows' | null {
+  if (platform === 'darwin' || platform === 'linux') return platform;
+  if (platform === 'win32') return 'windows';
+  return null;
+}
+
+function mapArchTag(arch: string): 'x64' | 'arm64' | null {
+  if (arch === 'x64' || arch === 'arm64') return arch;
+  return null;
+}
+
+function resolveNativeAttachBinary(): string {
+  const explicit = process.env[NATIVE_ATTACH_BIN_ENV]?.trim();
+  if (explicit) return explicit;
+
+  const binaryName = process.platform === 'win32' ? 'discode-runtime-client.exe' : 'discode-runtime-client';
+  const platformTag = mapPlatformTag(process.platform);
+  const archTag = mapArchTag(process.arch);
+  const rawHints = [
+    process.env.DISCODE_REPO,
+    process.cwd(),
+    resolve(import.meta.dirname, '..', '..'),
+    resolve(import.meta.dirname, '..', '..', '..'),
+  ].filter((value): value is string => !!value && value.length > 0);
+  const repoHints = [...new Set(rawHints.map((value) => resolve(value)))];
+
+  const candidates = [
+    ...repoHints.map((root) => resolve(root, 'runtime-client-rs', 'target', 'release', binaryName)),
+    ...(platformTag && archTag
+      ? repoHints.map((root) =>
+        resolve(
+          root,
+          'dist',
+          'release',
+          'runtime-client',
+          `discode-runtime-client-${platformTag}-${archTag}`,
+          'bin',
+          binaryName,
+        ))
+      : []),
+    ...(platformTag && archTag
+      ? repoHints.map((root) =>
+        resolve(
+          root,
+          'node_modules',
+          `@siisee11/discode-runtime-client-${platformTag}-${archTag}`,
+          'bin',
+          binaryName,
+        ))
+      : []),
+    resolve(homedir(), '.discode', 'bin', binaryName),
+    ...(platformTag && archTag
+      ? [join(homedir(), '.discode', 'bin', 'runtime-client', `${platformTag}-${archTag}`, binaryName)]
+      : []),
+  ];
+
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return candidate;
+  }
+
+  return 'discode-runtime-client';
+}
+
+function tryNativeAttach(windowId: string, mode: NativeAttachMode, port: number): boolean {
+  if (mode === 'off') return false;
+
+  const runtimeSocket = getDefaultRuntimeSocketPath();
+  const binary = resolveNativeAttachBinary();
+  const result = spawnSync(
+    binary,
+    ['--socket', runtimeSocket, '--window-id', windowId, '--daemon-port', String(port)],
+    { stdio: 'inherit' },
+  );
+
+  if (result.error) {
+    if (mode === 'on') {
+      const message = result.error instanceof Error ? result.error.message : String(result.error);
+      console.log(chalk.yellow(`⚠️ Native attach unavailable (${message}); falling back to TUI.`));
+    }
+    return false;
+  }
+
+  if (result.status === 0) return true;
+  if (mode === 'on') {
+    console.log(chalk.yellow(`⚠️ Native attach exited with status ${result.status ?? 'unknown'}; falling back to TUI.`));
+  }
+  return false;
+}
+
+async function logRuntimeWindowsSnapshot(port: number, label: string, targetWindowId: string): Promise<void> {
+  const runtimeWindows = await listRuntimeWindows(port);
+  if (!runtimeWindows) {
+    console.log(chalk.gray(`   ${RUNTIME_TRACE_PREFIX} ${label}: /runtime/windows unavailable`));
+    return;
+  }
+
+  const active = runtimeWindows.activeWindowId || '(none)';
+  const targetPresent = runtimeWindows.windows.some((window) => window.windowId === targetWindowId);
+  console.log(chalk.gray(
+    `   ${RUNTIME_TRACE_PREFIX} ${label}: windows=${runtimeWindows.windows.length} active=${active} targetPresent=${targetPresent}`,
+  ));
+  for (const window of runtimeWindows.windows) {
+    const marker = window.windowId === targetWindowId ? ' <- target' : '';
+    console.log(chalk.gray(
+      `   ${RUNTIME_TRACE_PREFIX} window=${window.windowId} status=${window.status || 'unknown'} pid=${window.pid ?? '-'}${marker}`,
+    ));
+  }
 }
 
 export async function attachCommand(projectName: string | undefined, options: TmuxCliOptions & { instance?: string }) {
@@ -90,10 +289,13 @@ export async function attachCommand(projectName: string | undefined, options: Tm
       ? resolveProjectWindowName(project, firstInstance.agentType, effectiveConfig.tmux, firstInstance.instanceId)
       : undefined;
   const attachTarget = windowName ? `${sessionName}:${windowName}` : sessionName;
+  const nativeAttachMode = resolveNativeAttachMode();
 
   if (isPtyRuntimeMode(runtimeMode)) {
+    let runtimeWindowId: string | undefined;
     if (windowName) {
       const windowId = `${sessionName}:${windowName}`;
+      runtimeWindowId = windowId;
       const port = effectiveConfig.hookServerPort || 18470;
       const focused = await focusRuntimeWindowWithRetry({
         port,
@@ -105,6 +307,10 @@ export async function attachCommand(projectName: string | undefined, options: Tm
       if (!focused) {
         console.log(chalk.yellow('⚠️ Could not focus runtime window. Opening TUI anyway.'));
       }
+    }
+
+    if (runtimeWindowId && tryNativeAttach(runtimeWindowId, nativeAttachMode, effectiveConfig.hookServerPort || 18470)) {
+      return;
     }
 
     const { tuiCommand } = await import('./tui.js');

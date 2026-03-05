@@ -6,9 +6,9 @@ const mocks = vi.hoisted(() => {
     on: vi.fn(),
   };
   const spawn = vi.fn().mockReturnValue(spawnResult);
-  const getLogFile = vi.fn().mockReturnValue('/home/user/.discode/daemon.log');
+  const getDaemonLogFilePath = vi.fn().mockReturnValue('/home/user/.discode/daemon.log');
 
-  return { existsSync, spawn, spawnResult, getLogFile };
+  return { existsSync, spawn, spawnResult, getDaemonLogFilePath };
 });
 
 vi.mock('fs', () => ({
@@ -19,10 +19,8 @@ vi.mock('child_process', () => ({
   spawn: mocks.spawn,
 }));
 
-vi.mock('../../../src/daemon.js', () => ({
-  defaultDaemonManager: {
-    getLogFile: mocks.getLogFile,
-  },
+vi.mock('../../../src/app/daemon-service.js', () => ({
+  getDaemonLogFilePath: mocks.getDaemonLogFilePath,
 }));
 
 describe('logsCommand', () => {
@@ -90,7 +88,7 @@ describe('logsCommand', () => {
   });
 
   it('checks the correct log file path from daemon manager', () => {
-    mocks.getLogFile.mockReturnValue('/custom/path/daemon.log');
+    mocks.getDaemonLogFilePath.mockReturnValue('/custom/path/daemon.log');
     mocks.existsSync.mockReturnValue(true);
 
     logsCommand({});

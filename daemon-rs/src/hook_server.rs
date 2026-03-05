@@ -2,6 +2,7 @@ use crate::compat;
 use crate::runtime_control::{RuntimeControl, RuntimeControlError};
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
+use std::env;
 use std::fs;
 use std::io::{self, Read, Write};
 use std::net::TcpStream;
@@ -110,7 +111,7 @@ impl HookServer {
             "/runtime/focus" => self.handle_runtime_focus(&payload),
             "/runtime/input" => self.handle_runtime_input(&payload),
             "/runtime/stop" => self.handle_runtime_stop(&payload),
-            "/runtime/ensure" => HttpResponse::text(501, "Runtime control unavailable"),
+            "/runtime/ensure" => self.handle_runtime_ensure(&payload),
             "/opencode-event" => {
                 if self.handle_opencode_event(&payload) {
                     HttpResponse::text(200, "OK")
@@ -233,6 +234,93 @@ impl HookServer {
             }
             Err(RuntimeControlError::WindowNotFound | RuntimeControlError::InvalidWindowId) => {
                 HttpResponse::text(404, "Window not found")
+            }
+            Err(_) => HttpResponse::text(400, "Runtime operation failed"),
+        }
+    }
+
+    fn handle_runtime_ensure(&self, payload: &Value) -> HttpResponse {
+        let Some(obj) = payload.as_object() else {
+            return HttpResponse::text(400, "Invalid payload");
+        };
+
+        let project_name = match obj.get("projectName").and_then(non_empty_str) {
+            Some(value) => value,
+            None => return HttpResponse::text(400, "Missing projectName"),
+        };
+        let requested_instance_id = obj.get("instanceId").and_then(non_empty_str);
+        let permission_allow = obj
+            .get("permissionAllow")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+
+        let state = self.load_state();
+        let Some(project) = state.projects.get(project_name) else {
+            return HttpResponse::text(404, "Project not found");
+        };
+
+        let instance = match requested_instance_id {
+            Some(id) => resolve_instance(project, "opencode", Some(id)),
+            None => project
+                .as_object()
+                .and_then(|obj| obj.get("instances"))
+                .and_then(Value::as_object)
+                .and_then(|instances| {
+                    let mut keys: Vec<String> = instances.keys().cloned().collect();
+                    keys.sort();
+                    keys.into_iter()
+                        .find_map(|key| instances.get(&key).cloned())
+                }),
+        };
+        let Some(instance) = instance else {
+            return HttpResponse::text(404, "Instance not found");
+        };
+
+        let session_name = project
+            .as_object()
+            .and_then(|obj| obj.get("tmuxSession"))
+            .and_then(non_empty_str);
+        let window_name = instance
+            .as_object()
+            .and_then(|obj| obj.get("tmuxWindow"))
+            .and_then(non_empty_str);
+        let project_path = project
+            .as_object()
+            .and_then(|obj| obj.get("projectPath"))
+            .and_then(non_empty_str);
+        let agent_type = instance
+            .as_object()
+            .and_then(|obj| obj.get("agentType"))
+            .and_then(non_empty_str)
+            .unwrap_or("opencode");
+        let instance_id = instance
+            .as_object()
+            .and_then(|obj| obj.get("instanceId"))
+            .and_then(non_empty_str)
+            .or(requested_instance_id)
+            .unwrap_or(agent_type);
+
+        let (Some(session_name), Some(window_name), Some(project_path)) =
+            (session_name, window_name, project_path)
+        else {
+            return HttpResponse::text(400, "Invalid project state");
+        };
+
+        let command = build_runtime_ensure_command(
+            project_name,
+            project_path,
+            agent_type,
+            instance_id,
+            permission_allow,
+            self.auth_token.as_deref(),
+        );
+
+        match self
+            .with_runtime(|runtime| runtime.ensure_window(session_name, window_name, &command))
+        {
+            Ok(()) => HttpResponse::text(200, "OK"),
+            Err(RuntimeControlError::Unavailable) => {
+                HttpResponse::text(501, "Runtime control unavailable")
             }
             Err(_) => HttpResponse::text(400, "Runtime operation failed"),
         }
@@ -740,6 +828,107 @@ fn non_empty_str(value: &Value) -> Option<&str> {
             Some(raw)
         }
     })
+}
+
+fn build_runtime_ensure_command(
+    project_name: &str,
+    project_path: &str,
+    agent_type: &str,
+    instance_id: &str,
+    permission_allow: bool,
+    hook_token: Option<&str>,
+) -> String {
+    let mut env_vars = vec![
+        ("DISCODE_PROJECT".to_string(), project_name.to_string()),
+        (
+            "DISCODE_PORT".to_string(),
+            resolve_daemon_port().to_string(),
+        ),
+        ("DISCODE_AGENT".to_string(), agent_type.to_string()),
+        ("DISCODE_INSTANCE".to_string(), instance_id.to_string()),
+    ];
+    if let Some(token) = hook_token {
+        env_vars.push(("DISCODE_HOOK_TOKEN".to_string(), token.to_string()));
+    }
+    if agent_type == "opencode" && permission_allow {
+        env_vars.push((
+            "OPENCODE_PERMISSION".to_string(),
+            r#"{"*":"allow"}"#.to_string(),
+        ));
+    }
+
+    let export_prefix = env_vars
+        .into_iter()
+        .map(|(key, value)| format!("export {key}={}", shell_escape(&value)))
+        .collect::<Vec<_>>()
+        .join("; ");
+
+    let start_command = build_agent_start_command(agent_type, project_path, permission_allow);
+    if export_prefix.is_empty() {
+        start_command
+    } else {
+        format!("{export_prefix}; {start_command}")
+    }
+}
+
+fn resolve_daemon_port() -> u16 {
+    env::var("HOOK_SERVER_PORT")
+        .ok()
+        .and_then(|raw| raw.trim().parse::<u16>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(18470)
+}
+
+fn build_agent_start_command(
+    agent_type: &str,
+    project_path: &str,
+    permission_allow: bool,
+) -> String {
+    let agent_command = match agent_type {
+        "claude" => {
+            let mut cmd = String::from("claude");
+            if permission_allow {
+                cmd.push_str(" --dangerously-skip-permissions");
+            }
+            let plugin_dir = resolve_claude_plugin_dir();
+            if let Some(plugin_dir) = plugin_dir {
+                cmd.push_str(" --plugin-dir ");
+                cmd.push_str(&shell_escape(&plugin_dir));
+            }
+            cmd
+        }
+        "codex" => {
+            let mut cmd = String::from("codex");
+            if permission_allow {
+                cmd.push_str(" --full-auto");
+            }
+            cmd
+        }
+        "gemini" => "gemini".to_string(),
+        "opencode" => "opencode".to_string(),
+        other => other.to_string(),
+    };
+
+    format!("cd {} && {}", shell_escape(project_path), agent_command)
+}
+
+fn resolve_claude_plugin_dir() -> Option<String> {
+    let home = env::var("HOME").ok()?;
+    let path = PathBuf::from(home)
+        .join(".claude")
+        .join("plugins")
+        .join("discode-claude-bridge");
+    if path.exists() {
+        return Some(path.to_string_lossy().to_string());
+    }
+    None
+}
+
+fn shell_escape(value: &str) -> String {
+    if value.is_empty() {
+        return "''".to_string();
+    }
+    format!("'{}'", value.replace('\'', "'\"'\"'"))
 }
 
 struct TokenBucket {

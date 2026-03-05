@@ -22,3 +22,5 @@ sidecar/pty-rust/target/
 sidecar/pty-rust/Cargo.lock
 daemon-rs/target/
 daemon-rs/Cargo.lock
+runtime-client-rs/target/
+runtime-client-rs/Cargo.lock

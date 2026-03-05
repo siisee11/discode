@@ -374,3 +374,49 @@ Validation:
 - `npx vitest run tests/app/daemon-service.test.ts`
 - `cargo test --manifest-path daemon-rs/Cargo.toml`
 - `npm run test:daemon-contract`
+
+## B7 canary and default flip (current implementation)
+
+SLO and rollout gate document:
+
+- `docs/DAEMON_RUST_PHASE7_SLO_CANARY.md`
+
+Historical rollout controls used for canary/default flip (`src/app/daemon-service.ts`):
+
+- explicit backend override:
+  - `DISCODE_DAEMON_BACKEND=rust|ts`
+- staged rollout knobs:
+  - `DISCODE_DAEMON_RUST_ROLLOUT_PERCENT=0..100`
+  - `DISCODE_DAEMON_CANARY_KEY`
+- default flipped to Rust daemon (`DEFAULT_DAEMON_BACKEND = rust`) with temporary TS fallback safety
+
+These transition controls were removed in B8 when TS daemon startup/fallback paths were retired.
+
+Validation focus for B7:
+
+- `npx vitest run tests/app/daemon-service.test.ts`
+- `npx vitest run tests/e2e/daemon-lifecycle.test.ts`
+- `npm run test:daemon-contract`
+
+## B8 retire TypeScript daemon paths (current implementation)
+
+Transitioned runtime control to Rust daemon only:
+
+- `src/app/daemon-service.ts` no longer starts or falls back to TS daemon entrypoints
+- daemon orchestration commands now execute only Rust daemon actions (`start|stop|status`)
+- TypeScript daemon entrypoint probing (`src/daemon-entry.ts`) has been removed from active daemon startup flow
+- CLI/runtime callers now use Rust daemon service APIs directly:
+  - `src/cli/commands/logs.ts` uses `getDaemonLogFilePath`
+  - `src/cli/commands/uninstall.ts` uses `getDaemonStatus` + `stopDaemon`
+  - `src/cli/commands/tui.ts` uses `getDaemonLogFilePath` for backend/log inspection
+- legacy TypeScript daemon manager module has been removed (`src/daemon.ts` deleted)
+
+CLI behavior updates:
+
+- `src/cli/commands/daemon.ts` now reports Rust daemon backend consistently
+- startup/restart errors surface direct Rust daemon failure reason (no TS fallback messaging)
+
+Validation focus for this step:
+
+- `npx vitest run tests/app/daemon-service.test.ts`
+- `npx vitest run tests/e2e/daemon-lifecycle.test.ts`

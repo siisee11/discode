@@ -13,6 +13,10 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 const FRAME_TICK_MS: u64 = 50;
+pub const RUNTIME_STREAM_PROTOCOL_MIN_SUPPORTED_VERSION: u64 = RUNTIME_STREAM_PROTOCOL_VERSION;
+pub const RUNTIME_STREAM_PROTOCOL_MAX_SUPPORTED_VERSION: u64 = 2;
+const RUNTIME_STREAM_PROTOCOL_VERSION_V1: u64 = RUNTIME_STREAM_PROTOCOL_MIN_SUPPORTED_VERSION;
+const RUNTIME_STREAM_PROTOCOL_VERSION_V2: u64 = RUNTIME_STREAM_PROTOCOL_MAX_SUPPORTED_VERSION;
 
 pub trait RuntimeStreamRuntime {
     fn focus_window(&mut self, window_id: &str) -> Result<(), RuntimeControlError>;
@@ -160,6 +164,8 @@ struct ClientState {
     rows: u16,
     missing_notified: bool,
     last_flush: Instant,
+    protocol_version: u64,
+    seq: u64,
 }
 
 fn handle_client<R>(mut stream: UnixStream, runtime: Arc<Mutex<R>>, running: Arc<AtomicBool>)
@@ -174,6 +180,8 @@ where
         rows: 40,
         missing_notified: false,
         last_flush: Instant::now(),
+        protocol_version: RUNTIME_STREAM_PROTOCOL_VERSION_V1,
+        seq: 0,
     };
 
     let mut read_buffer = String::new();
@@ -227,6 +235,7 @@ where
             send_message(
                 stream,
                 json!({ "type": "error", "code": "bad_json", "message": "Invalid JSON" }),
+                state.protocol_version,
             );
             return true;
         }
@@ -240,6 +249,7 @@ where
         send_message(
             stream,
             json!({ "type": "error", "code": "bad_message", "message": "Invalid message" }),
+            state.protocol_version,
         );
         return true;
     };
@@ -247,7 +257,7 @@ where
     match message_type {
         "hello" => {
             if let Some(version) = parse_protocol_version(payload.get("version")) {
-                if version != RUNTIME_STREAM_PROTOCOL_VERSION {
+                if !is_supported_protocol_version(version) {
                     send_message(
                         stream,
                         json!({
@@ -255,17 +265,27 @@ where
                             "code": "unsupported_protocol_version",
                             "message": format!("Unsupported runtime stream protocol version: {version}"),
                         }),
+                        RUNTIME_STREAM_PROTOCOL_VERSION_V2,
                     );
                     return false;
                 }
+                state.protocol_version = version;
             }
-            send_message(stream, json!({ "type": "hello", "ok": true }));
+            send_message(
+                stream,
+                json!({
+                    "type": "hello",
+                    "ok": true,
+                }),
+                state.protocol_version,
+            );
         }
         "subscribe" => {
             let Some(window_id) = payload.get("windowId").and_then(Value::as_str) else {
                 send_message(
                     stream,
                     json!({ "type": "error", "code": "bad_subscribe", "message": "Missing windowId" }),
+                    state.protocol_version,
                 );
                 return true;
             };
@@ -274,6 +294,13 @@ where
             state.cols = clamp_u16(payload.get("cols"), 30, 240, 120);
             state.rows = clamp_u16(payload.get("rows"), 10, 120, 40);
             state.missing_notified = false;
+            if state.protocol_version >= RUNTIME_STREAM_PROTOCOL_VERSION_V2 {
+                send_message(
+                    stream,
+                    json!({ "type": "ack", "op": "subscribe", "windowId": window_id }),
+                    state.protocol_version,
+                );
+            }
             send_frame(stream, runtime, state);
         }
         "focus" => {
@@ -281,6 +308,7 @@ where
                 send_message(
                     stream,
                     json!({ "type": "error", "code": "bad_focus", "message": "Missing windowId" }),
+                    state.protocol_version,
                 );
                 return true;
             };
@@ -291,10 +319,19 @@ where
                 let _ = guard.focus_window(window_id);
             }
 
-            send_message(
-                stream,
-                json!({ "type": "focus", "ok": true, "windowId": window_id }),
-            );
+            if state.protocol_version >= RUNTIME_STREAM_PROTOCOL_VERSION_V2 {
+                send_message(
+                    stream,
+                    json!({ "type": "ack", "op": "focus", "windowId": window_id }),
+                    state.protocol_version,
+                );
+            } else {
+                send_message(
+                    stream,
+                    json!({ "type": "focus", "ok": true, "windowId": window_id }),
+                    state.protocol_version,
+                );
+            }
             send_frame(stream, runtime, state);
         }
         "input" => {
@@ -302,6 +339,7 @@ where
                 send_message(
                     stream,
                     json!({ "type": "error", "code": "bad_input", "message": "Invalid windowId" }),
+                    state.protocol_version,
                 );
                 return true;
             };
@@ -310,6 +348,7 @@ where
                 send_message(
                     stream,
                     json!({ "type": "error", "code": "bad_input", "message": "Invalid bytesBase64" }),
+                    state.protocol_version,
                 );
                 return true;
             };
@@ -320,6 +359,7 @@ where
                     send_message(
                         stream,
                         json!({ "type": "error", "code": "bad_input", "message": "Invalid bytesBase64" }),
+                        state.protocol_version,
                     );
                     return true;
                 }
@@ -333,33 +373,26 @@ where
 
             match result {
                 Some(Ok(())) => {
-                    send_message(
-                        stream,
-                        json!({ "type": "input", "ok": true, "windowId": window_id }),
-                    );
+                    if state.protocol_version >= RUNTIME_STREAM_PROTOCOL_VERSION_V2 {
+                        send_message(
+                            stream,
+                            json!({ "type": "ack", "op": "input", "windowId": window_id }),
+                            state.protocol_version,
+                        );
+                    } else {
+                        send_message(
+                            stream,
+                            json!({ "type": "input", "ok": true, "windowId": window_id }),
+                            state.protocol_version,
+                        );
+                    }
                 }
                 Some(Err(RuntimeControlError::WindowNotFound))
                 | Some(Err(RuntimeControlError::InvalidWindowId)) => {
-                    send_message(
-                        stream,
-                        json!({
-                            "type": "window-exit",
-                            "windowId": window_id,
-                            "code": Value::Null,
-                            "signal": "missing",
-                        }),
-                    );
+                    send_window_exit(stream, window_id, "missing", state.protocol_version);
                 }
                 Some(Err(_)) | None => {
-                    send_message(
-                        stream,
-                        json!({
-                            "type": "window-exit",
-                            "windowId": window_id,
-                            "code": Value::Null,
-                            "signal": "not_running",
-                        }),
-                    );
+                    send_window_exit(stream, window_id, "not_running", state.protocol_version);
                 }
             }
         }
@@ -376,12 +409,32 @@ where
             if let Ok(mut guard) = runtime.lock() {
                 let _ = guard.resize_window(window_id, state.cols, state.rows);
             }
+            if state.protocol_version >= RUNTIME_STREAM_PROTOCOL_VERSION_V2 {
+                send_message(
+                    stream,
+                    json!({ "type": "ack", "op": "resize", "windowId": window_id }),
+                    state.protocol_version,
+                );
+            }
             send_frame(stream, runtime, state);
+        }
+        "ping" => {
+            let ping_id = payload
+                .get("id")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string();
+            send_message(
+                stream,
+                json!({ "type": "pong", "id": ping_id }),
+                state.protocol_version,
+            );
         }
         _ => {
             send_message(
                 stream,
                 json!({ "type": "error", "code": "unknown_type", "message": "Unknown message type" }),
+                state.protocol_version,
             );
         }
     }
@@ -405,37 +458,31 @@ where
     match result {
         Some(Ok(frame)) => {
             state.missing_notified = false;
-            send_message(
-                stream,
-                json!({ "type": "frame-styled", "windowId": window_id, "frame": frame }),
-            );
+            state.seq = state.seq.saturating_add(1);
+            if state.protocol_version >= RUNTIME_STREAM_PROTOCOL_VERSION_V2 {
+                send_message(
+                    stream,
+                    frame_to_v2_payload(&window_id, state.seq, &frame),
+                    state.protocol_version,
+                );
+            } else {
+                send_message(
+                    stream,
+                    json!({ "type": "frame-styled", "windowId": window_id, "frame": frame }),
+                    state.protocol_version,
+                );
+            }
         }
         Some(Err(RuntimeControlError::WindowNotFound))
         | Some(Err(RuntimeControlError::InvalidWindowId)) => {
             if !state.missing_notified {
-                send_message(
-                    stream,
-                    json!({
-                        "type": "window-exit",
-                        "windowId": window_id,
-                        "code": Value::Null,
-                        "signal": "missing",
-                    }),
-                );
+                send_window_exit(stream, &window_id, "missing", state.protocol_version);
                 state.missing_notified = true;
             }
         }
         Some(Err(_)) | None => {
             if !state.missing_notified {
-                send_message(
-                    stream,
-                    json!({
-                        "type": "window-exit",
-                        "windowId": window_id,
-                        "code": Value::Null,
-                        "signal": "not_running",
-                    }),
-                );
+                send_window_exit(stream, &window_id, "not_running", state.protocol_version);
                 state.missing_notified = true;
             }
         }
@@ -450,6 +497,91 @@ fn parse_protocol_version(value: Option<&Value>) -> Option<u64> {
     }
 }
 
+fn is_supported_protocol_version(version: u64) -> bool {
+    version == RUNTIME_STREAM_PROTOCOL_VERSION_V1 || version == RUNTIME_STREAM_PROTOCOL_VERSION_V2
+}
+
+fn frame_to_v2_payload(window_id: &str, seq: u64, frame: &Value) -> Value {
+    let lines = frame
+        .get("lines")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let line_count = lines.len();
+
+    let cursor_row = frame
+        .get("cursorRow")
+        .and_then(Value::as_u64)
+        .or_else(|| {
+            frame
+                .get("cursor")
+                .and_then(Value::as_object)
+                .and_then(|cursor| cursor.get("row"))
+                .and_then(Value::as_u64)
+        })
+        .unwrap_or(0);
+    let cursor_col = frame
+        .get("cursorCol")
+        .and_then(Value::as_u64)
+        .or_else(|| {
+            frame
+                .get("cursor")
+                .and_then(Value::as_object)
+                .and_then(|cursor| cursor.get("col"))
+                .and_then(Value::as_u64)
+        })
+        .unwrap_or(0);
+    let cursor_visible = frame
+        .get("cursorVisible")
+        .and_then(Value::as_bool)
+        .or_else(|| {
+            frame
+                .get("cursor")
+                .and_then(Value::as_object)
+                .and_then(|cursor| cursor.get("visible"))
+                .and_then(Value::as_bool)
+        })
+        .unwrap_or(true);
+
+    json!({
+        "type": "frame-v2",
+        "windowId": window_id,
+        "seq": seq,
+        "cursorRow": cursor_row,
+        "cursorCol": cursor_col,
+        "cursorVisible": cursor_visible,
+        "lineCount": line_count,
+        "lines": lines,
+    })
+}
+
+fn send_window_exit(stream: &mut UnixStream, window_id: &str, signal: &str, protocol_version: u64) {
+    if protocol_version >= RUNTIME_STREAM_PROTOCOL_VERSION_V2 {
+        send_message(
+            stream,
+            json!({
+                "type": "window-exit",
+                "windowId": window_id,
+                "exitCode": Value::Null,
+                "signal": signal,
+            }),
+            protocol_version,
+        );
+        return;
+    }
+
+    send_message(
+        stream,
+        json!({
+            "type": "window-exit",
+            "windowId": window_id,
+            "code": Value::Null,
+            "signal": signal,
+        }),
+        protocol_version,
+    );
+}
+
 fn clamp_u16(value: Option<&Value>, min: u16, max: u16, fallback: u16) -> u16 {
     let parsed = value
         .and_then(Value::as_i64)
@@ -458,12 +590,12 @@ fn clamp_u16(value: Option<&Value>, min: u16, max: u16, fallback: u16) -> u16 {
     parsed.unwrap_or(fallback)
 }
 
-fn send_message(stream: &mut UnixStream, payload: Value) {
+fn send_message(stream: &mut UnixStream, payload: Value, stream_protocol_version: u64) {
     if let Some(object) = payload.as_object() {
         let mut with_version = object.clone();
         with_version.insert(
             "streamProtocolVersion".to_string(),
-            json!(RUNTIME_STREAM_PROTOCOL_VERSION),
+            json!(stream_protocol_version),
         );
         let encoded = Value::Object(with_version).to_string();
         let _ = stream.write_all(encoded.as_bytes());
@@ -628,6 +760,54 @@ mod tests {
     fn clamps_dimensions() {
         assert_eq!(clamp_u16(Some(&json!(80)), 30, 240, 120), 80);
         assert_eq!(clamp_u16(Some(&json!(10)), 30, 240, 120), 120);
+    }
+
+    #[test]
+    fn supports_v2_handshake_and_emits_v2_frames() {
+        let socket_path = unique_socket_path("drs-v2");
+        let runtime = Arc::new(Mutex::new(MockRuntime::default()));
+        let mut service = RuntimeStreamService::new(socket_path.clone(), Arc::clone(&runtime));
+        service.start().expect("stream service should start");
+        wait_for_socket(&socket_path);
+
+        let mut stream = connect_with_retry(&socket_path);
+        let window_id = "bridge:v2";
+
+        write_json_line(&mut stream, json!({ "type": "hello", "version": 2 }));
+        write_json_line(
+            &mut stream,
+            json!({ "type": "subscribe", "windowId": window_id, "cols": 120, "rows": 40 }),
+        );
+        let output = read_for(&mut stream, Duration::from_millis(350));
+
+        assert!(output.contains("\"type\":\"hello\""));
+        assert!(output.contains("\"streamProtocolVersion\":2"));
+        assert!(output.contains("\"type\":\"ack\""));
+        assert!(output.contains("\"op\":\"subscribe\""));
+        assert!(output.contains("\"type\":\"frame-v2\""));
+        assert!(!output.contains("\"type\":\"frame-styled\""));
+
+        service.stop();
+        let _ = fs::remove_file(socket_path);
+    }
+
+    #[test]
+    fn rejects_unsupported_protocol_versions() {
+        let socket_path = unique_socket_path("drs-vx");
+        let runtime = Arc::new(Mutex::new(MockRuntime::default()));
+        let mut service = RuntimeStreamService::new(socket_path.clone(), Arc::clone(&runtime));
+        service.start().expect("stream service should start");
+        wait_for_socket(&socket_path);
+
+        let mut stream = connect_with_retry(&socket_path);
+        write_json_line(&mut stream, json!({ "type": "hello", "version": 999 }));
+        let output = read_for(&mut stream, Duration::from_millis(200));
+
+        assert!(output.contains("\"code\":\"unsupported_protocol_version\""));
+        assert!(output.contains("\"streamProtocolVersion\":2"));
+
+        service.stop();
+        let _ = fs::remove_file(socket_path);
     }
 
     #[test]

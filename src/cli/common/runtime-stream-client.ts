@@ -32,6 +32,18 @@ type FrameStyledMessage = {
   cursorVisible?: boolean;
 };
 
+type FrameV2Message = {
+  type: 'frame-v2';
+  streamProtocolVersion?: number;
+  windowId: string;
+  seq: number;
+  lineCount?: number;
+  lines: TerminalStyledLine[];
+  cursorRow?: number;
+  cursorCol?: number;
+  cursorVisible?: boolean;
+};
+
 type FrameStyledEnvelopeMessage = {
   type: 'frame-styled';
   streamProtocolVersion?: number;
@@ -68,9 +80,12 @@ type RuntimeStreamMessage =
   | FrameMessage
   | PatchMessage
   | FrameStyledMessage
+  | FrameV2Message
   | FrameStyledEnvelopeMessage
   | PatchStyledMessage
   | WindowExitMessage
+  | { type: 'ack'; op: 'subscribe' | 'focus' | 'input' | 'resize'; windowId: string; streamProtocolVersion?: number }
+  | { type: 'pong'; id: string; streamProtocolVersion?: number }
   | { type: 'hello'; ok: boolean; streamProtocolVersion?: number }
   | { type: 'focus'; ok: boolean; windowId: string }
   | { type: 'input'; ok: boolean; windowId: string }
@@ -247,6 +262,20 @@ export class RuntimeStreamClient {
       } else {
         this.handlers.onFrameStyled?.(msg as FrameStyledMessage);
       }
+      return;
+    }
+    if (msg.type === 'frame-v2') {
+      const frame = msg as FrameV2Message;
+      this.handlers.onFrameStyled?.({
+        type: 'frame-styled',
+        streamProtocolVersion: frame.streamProtocolVersion,
+        windowId: frame.windowId,
+        seq: Number.isFinite(frame.seq) ? frame.seq : 0,
+        lines: Array.isArray(frame.lines) ? frame.lines : [],
+        cursorRow: frame.cursorRow,
+        cursorCol: frame.cursorCol,
+        cursorVisible: frame.cursorVisible,
+      });
       return;
     }
     if (msg.type === 'patch-styled') {
