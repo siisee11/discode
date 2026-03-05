@@ -8,6 +8,7 @@ import { agentRegistry } from '../../agents/index.js';
 import { TmuxManager } from '../../tmux/manager.js';
 import { listProjectInstances } from '../../state/instances.js';
 import { defaultDaemonManager } from '../../daemon.js';
+import { ensureDaemonRunning, getDaemonStatus, restartDaemonIfRunning } from '../../app/daemon-service.js';
 import { isPtyRuntimeMode } from '../../runtime/mode.js';
 import type { TmuxCliOptions } from '../common/types.js';
 import {
@@ -18,6 +19,7 @@ import {
   waitForTmuxPaneAlive,
 } from '../common/tmux.js';
 import { RuntimeSessionManager } from '../common/runtime-session-manager.js';
+import { getDefaultRuntimeSocketPath } from '../common/runtime-stream-client.js';
 import { handleTuiCommand } from './tui-command-handler.js';
 import { attachCommand } from './attach.js';
 import { stopCommand } from './stop.js';
@@ -105,13 +107,62 @@ function resolveRuntimeWindowForProject(
   };
 }
 
+function isRuntimeStreamUnavailableError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error || '');
+  return message.includes('Runtime stream unavailable');
+}
+
+async function connectRuntimeSessionWithRecovery(session: RuntimeSessionManager): Promise<void> {
+  let initialErrorMessage = 'Runtime stream unavailable.';
+  try {
+    await session.connect();
+    return;
+  } catch (error) {
+    if (!isRuntimeStreamUnavailableError(error)) throw error;
+    initialErrorMessage = error instanceof Error ? error.message : String(error);
+  }
+
+  let recoveryDetail = '';
+  try {
+    const daemonStatus = await getDaemonStatus();
+    const runtimeSocketPath = getDefaultRuntimeSocketPath();
+    const runtimeSocketExists = existsSync(runtimeSocketPath);
+
+    if (!daemonStatus.running) {
+      const started = await ensureDaemonRunning();
+      recoveryDetail = started.ready
+        ? `daemon started (${started.backend})`
+        : `daemon start attempted but not ready (${started.backend})`;
+    } else if (!runtimeSocketExists) {
+      const restarted = await restartDaemonIfRunning();
+      recoveryDetail = restarted.restarted
+        ? `daemon restarted (${restarted.backend}, ready=${restarted.ready ? 'yes' : 'no'})`
+        : `daemon restart attempt failed (${restarted.backend})`;
+    } else {
+      recoveryDetail = 'daemon is running and runtime socket exists; retrying stream connect';
+    }
+  } catch (recoveryError) {
+    const detail = recoveryError instanceof Error ? recoveryError.message : String(recoveryError);
+    throw new Error(`${initialErrorMessage} Automatic recovery failed before reconnect (${detail}).`);
+  }
+
+  await new Promise((resolve) => setTimeout(resolve, 350));
+  try {
+    await session.connect();
+  } catch (retryError) {
+    if (!isRuntimeStreamUnavailableError(retryError)) throw retryError;
+    const retryMessage = retryError instanceof Error ? retryError.message : String(retryError);
+    throw new Error(`${retryMessage} Automatic recovery result: ${recoveryDetail}.`);
+  }
+}
+
 export async function tuiCommand(options: TmuxCliOptions): Promise<void> {
   const effectiveConfig = applyTmuxCliOverrides(config, options);
   const runtimePort = effectiveConfig.hookServerPort || 18470;
   let keepChannelOnStop = getConfigValue('keepChannelOnStop') === true;
 
   const session = new RuntimeSessionManager(runtimePort);
-  await session.connect();
+  await connectRuntimeSessionWithRecovery(session);
 
   const isBunRuntime = Boolean((process as { versions?: { bun?: string } }).versions?.bun);
   if (!isBunRuntime) {

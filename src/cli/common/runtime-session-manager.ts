@@ -131,7 +131,9 @@ export class RuntimeSessionManager {
         lastError: undefined,
       });
     } else {
-      throw new Error('Runtime stream unavailable. HTTP fallback has been removed; restart the daemon and try again.');
+      const detail = this.streamClient.getLastConnectError() || this.transportStatus.lastError;
+      const suffix = detail ? ` (${detail})` : '';
+      throw new Error(`Runtime stream unavailable. HTTP fallback has been removed; restart the daemon and try again.${suffix}`);
     }
     this.lastStreamConnectAttemptAt = Date.now();
   }

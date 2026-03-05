@@ -78,6 +78,7 @@ export class RuntimeStreamClient {
   private readBuffer = '';
   private connected = false;
   private streamProtocolVersion?: number;
+  private lastConnectError?: string;
 
   constructor(
     private socketPath: string,
@@ -86,6 +87,7 @@ export class RuntimeStreamClient {
 
   async connect(timeoutMs: number = 1200): Promise<boolean> {
     if (this.connected) return true;
+    this.lastConnectError = undefined;
 
     return await new Promise<boolean>((resolve) => {
       let done = false;
@@ -110,6 +112,7 @@ export class RuntimeStreamClient {
       });
 
       timer = setTimeout(() => {
+        this.lastConnectError = `runtime stream connect timeout after ${timeoutMs}ms`;
         socket.destroy();
         finish(false);
       }, timeoutMs);
@@ -128,11 +131,13 @@ export class RuntimeStreamClient {
         }
       });
 
-      socket.on('error', () => {
+      socket.on('error', (error: NodeJS.ErrnoException) => {
         this.connected = false;
         this.socket = undefined;
         this.handlers.onStateChange?.('disconnected');
-        this.handlers.onError?.('runtime stream socket error');
+        const detail = `${error.code || 'UNKNOWN'}: ${error.message || 'socket error'}`;
+        this.lastConnectError = `runtime stream socket error (${detail})`;
+        this.handlers.onError?.(this.lastConnectError);
         finish(false);
       });
 
@@ -161,6 +166,10 @@ export class RuntimeStreamClient {
 
   getStreamProtocolVersion(): number | undefined {
     return this.streamProtocolVersion;
+  }
+
+  getLastConnectError(): string | undefined {
+    return this.lastConnectError;
   }
 
   subscribe(windowId: string, cols: number, rows: number): void {
