@@ -12,7 +12,10 @@ import {
 import { flushClientFrame, type FrameRendererOptions } from './stream-frame-renderer.js';
 import { createRuntimeWindowApi, type RuntimeWindowApi } from './window-api.js';
 import { parseRuntimeWindowId } from './window-id.js';
-import { RUNTIME_STREAM_PROTOCOL_VERSION } from './protocol.js';
+import {
+  RUNTIME_STREAM_PROTOCOL_MAX_SUPPORTED_VERSION,
+  RUNTIME_STREAM_PROTOCOL_MIN_SUPPORTED_VERSION,
+} from './protocol.js';
 
 function parseProtocolVersion(v: unknown): number | undefined {
   if (typeof v === 'number' && Number.isFinite(v)) return v;
@@ -35,7 +38,8 @@ type RuntimeStreamInbound =
   | { type: 'subscribe'; windowId: string; cols?: number; rows?: number }
   | { type: 'focus'; windowId: string }
   | { type: 'input'; windowId: string; bytesBase64: string }
-  | { type: 'resize'; windowId: string; cols: number; rows: number };
+  | { type: 'resize'; windowId: string; cols: number; rows: number }
+  | { type: 'ping'; id?: string };
 
 export class RuntimeStreamServer {
   private server?: Server;
@@ -68,6 +72,7 @@ export class RuntimeStreamServer {
       const state: RuntimeStreamClientState = {
         socket,
         buffer: '',
+        protocolVersion: RUNTIME_STREAM_PROTOCOL_MIN_SUPPORTED_VERSION,
         cols: 120,
         rows: 40,
         seq: 0,
@@ -156,20 +161,21 @@ export class RuntimeStreamServer {
     switch (message.type) {
       case 'hello': {
         const requestedVersion = parseProtocolVersion(message.version);
-        if (requestedVersion !== undefined && requestedVersion !== RUNTIME_STREAM_PROTOCOL_VERSION) {
+        if (requestedVersion !== undefined && !this.isSupportedProtocolVersion(requestedVersion)) {
           this.send(client, {
             type: 'error',
             code: 'unsupported_protocol_version',
             message: `Unsupported runtime stream protocol version: ${requestedVersion}`,
-            streamProtocolVersion: RUNTIME_STREAM_PROTOCOL_VERSION,
-          });
+          }, RUNTIME_STREAM_PROTOCOL_MAX_SUPPORTED_VERSION);
           client.socket.destroy();
           return;
+        }
+        if (requestedVersion !== undefined) {
+          client.protocolVersion = requestedVersion;
         }
         this.send(client, {
           type: 'hello',
           ok: true,
-          streamProtocolVersion: RUNTIME_STREAM_PROTOCOL_VERSION,
         });
         return;
       }
@@ -182,6 +188,9 @@ export class RuntimeStreamServer {
         client.cols = clampNumber(message.cols, 30, 240, 120);
         client.rows = clampNumber(message.rows, 10, 120, 40);
         this.resetClientState(client);
+        if (this.shouldUseAck(client)) {
+          this.send(client, { type: 'ack', op: 'subscribe', windowId: message.windowId });
+        }
         flushClientFrame(client, this.runtime, this.frameOptions, this.send.bind(this), true);
         return;
       }
@@ -192,7 +201,11 @@ export class RuntimeStreamServer {
         }
         client.windowId = message.windowId;
         this.resetClientState(client);
-        this.send(client, { type: 'focus', ok: true, windowId: message.windowId });
+        if (this.shouldUseAck(client)) {
+          this.send(client, { type: 'ack', op: 'focus', windowId: message.windowId });
+        } else {
+          this.send(client, { type: 'focus', ok: true, windowId: message.windowId });
+        }
         flushClientFrame(client, this.runtime, this.frameOptions, this.send.bind(this), true);
         return;
       }
@@ -208,27 +221,21 @@ export class RuntimeStreamServer {
           return;
         }
         if (!this.runtimeApi.exists(parsed)) {
-          this.send(client, {
-            type: 'window-exit',
-            windowId: message.windowId,
-            code: null,
-            signal: 'missing',
-          });
+          this.sendWindowExit(client, message.windowId, 'missing');
           return;
         }
         try {
           this.runtimeApi.input(parsed, bytes.toString('utf8'));
         } catch (error) {
-          this.send(client, {
-            type: 'window-exit',
-            windowId: message.windowId,
-            code: null,
-            signal: 'not_running',
-          });
+          this.sendWindowExit(client, message.windowId, 'not_running');
           incRuntimeMetric('stream_runtime_error');
           return;
         }
-        this.send(client, { type: 'input', ok: true, windowId: message.windowId });
+        if (this.shouldUseAck(client)) {
+          this.send(client, { type: 'ack', op: 'input', windowId: message.windowId });
+        } else {
+          this.send(client, { type: 'input', ok: true, windowId: message.windowId });
+        }
         return;
       }
       case 'resize': {
@@ -245,7 +252,14 @@ export class RuntimeStreamServer {
           }
         }
         this.resetClientState(client);
+        if (this.shouldUseAck(client)) {
+          this.send(client, { type: 'ack', op: 'resize', windowId: message.windowId });
+        }
         flushClientFrame(client, this.runtime, this.frameOptions, this.send.bind(this), true);
+        return;
+      }
+      case 'ping': {
+        this.send(client, { type: 'pong', id: message.id ?? '' });
         return;
       }
       default:
@@ -273,18 +287,50 @@ export class RuntimeStreamServer {
     client.lastCursorVisible = true;
   }
 
-  private send(client: RuntimeStreamClientState, payload: unknown): void {
+  private send(client: RuntimeStreamClientState, payload: unknown, protocolVersion?: number): void {
     try {
-      const withVersion = payload && typeof payload === 'object'
-        ? {
-          ...(payload as Record<string, unknown>),
-          streamProtocolVersion: RUNTIME_STREAM_PROTOCOL_VERSION,
-        }
-        : payload;
+      const version = protocolVersion ?? client.protocolVersion;
+      const withVersion = this.withProtocolPayload(payload, version);
       client.socket.write(`${JSON.stringify(withVersion)}\n`);
     } catch {
       this.clients.delete(client);
     }
+  }
+
+  private withProtocolPayload(payload: unknown, protocolVersion: number): unknown {
+    if (!payload || typeof payload !== 'object') return payload;
+    const message = { ...(payload as Record<string, unknown>) };
+    if (message.type === 'window-exit') {
+      if (protocolVersion >= 2) {
+        message.exitCode = message.code ?? null;
+        delete message.code;
+      } else {
+        message.code = message.exitCode ?? message.code ?? null;
+        delete message.exitCode;
+      }
+    }
+    message.streamProtocolVersion = protocolVersion;
+    return message;
+  }
+
+  private sendWindowExit(client: RuntimeStreamClientState, windowId: string, signal: string): void {
+    this.send(client, {
+      type: 'window-exit',
+      windowId,
+      code: null,
+      signal,
+    });
+  }
+
+  private shouldUseAck(client: RuntimeStreamClientState): boolean {
+    return client.protocolVersion >= 2;
+  }
+
+  private isSupportedProtocolVersion(version: number): boolean {
+    return (
+      version >= RUNTIME_STREAM_PROTOCOL_MIN_SUPPORTED_VERSION
+      && version <= RUNTIME_STREAM_PROTOCOL_MAX_SUPPORTED_VERSION
+    );
   }
 
   private cleanupSocketPath(): void {

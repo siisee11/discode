@@ -183,7 +183,58 @@ describe('RuntimeStreamServer', () => {
     const messages = raw.trim().split('\n').map(l => JSON.parse(l));
     const err = messages.find((m: any) => m.type === 'error');
     expect(err?.code).toBe('unsupported_protocol_version');
-    expect(err?.streamProtocolVersion).toBe(1);
+    expect(err?.streamProtocolVersion).toBe(2);
+  });
+
+  it('supports protocol v2 hello and emits ack/frame-v2/pong', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'discode-stream-v2-'));
+    registerCleanup(() => rmSync(dir, { recursive: true, force: true }));
+    const socketPath = join(dir, 'runtime.sock');
+
+    const runtime = createRuntimeMock();
+    const server = new RuntimeStreamServer(runtime, socketPath);
+    server.start();
+    registerCleanup(() => server.stop());
+
+    await waitFor(() => existsSync(socketPath));
+
+    const socket = createConnection(socketPath);
+    registerCleanup(() => socket.destroy());
+
+    let raw = '';
+    socket.setEncoding('utf8');
+    socket.on('data', (chunk) => { raw += chunk; });
+
+    await new Promise<void>((resolve) => socket.once('connect', () => resolve()));
+    socket.write(`${JSON.stringify({ type: 'hello', version: 2 })}\n`);
+    socket.write(`${JSON.stringify({ type: 'subscribe', windowId: 'bridge:demo-opencode', cols: 100, rows: 30 })}\n`);
+    socket.write(`${JSON.stringify({ type: 'ping', id: 'ping-1' })}\n`);
+
+    await waitFor(() => raw.includes('"type":"frame-v2"'));
+    await waitFor(() => raw.includes('"type":"ack"'));
+    await waitFor(() => raw.includes('"type":"pong"'));
+
+    const messages = raw.trim().split('\n').map(l => JSON.parse(l));
+    const hello = messages.find((m: any) => m.type === 'hello');
+    const ack = messages.find((m: any) => m.type === 'ack' && m.op === 'subscribe');
+    const frame = messages.find((m: any) => m.type === 'frame-v2');
+    const pong = messages.find((m: any) => m.type === 'pong');
+
+    expect(hello?.streamProtocolVersion).toBe(2);
+    expect(ack).toEqual({
+      type: 'ack',
+      op: 'subscribe',
+      windowId: 'bridge:demo-opencode',
+      streamProtocolVersion: 2,
+    });
+    expect(frame?.streamProtocolVersion).toBe(2);
+    expect(frame?.lineCount).toBeTypeOf('number');
+    expect(Array.isArray(frame?.lines)).toBe(true);
+    expect(pong).toEqual({
+      type: 'pong',
+      id: 'ping-1',
+      streamProtocolVersion: 2,
+    });
   });
 
   it('responds to focus message and sends frame', async () => {

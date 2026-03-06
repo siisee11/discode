@@ -42,6 +42,8 @@ const RESIZE_THROTTLE_MS: u64 = 40;
 #[cfg(unix)]
 const RECONNECT_BACKOFF_MS: [u64; 5] = [100, 300, 1000, 2000, 5000];
 #[cfg(unix)]
+const RUNTIME_STREAM_PROTOCOL_VERSION_V2: u64 = 2;
+#[cfg(unix)]
 const PING_INTERVAL_MS: u64 = 5000;
 #[cfg(unix)]
 const PONG_TIMEOUT_MS: u64 = 15000;
@@ -87,9 +89,7 @@ fn run() -> Result<(), String> {
             match connection.rx.try_recv() {
                 Ok(event) => match event {
                     StreamEvent::Message(value) => {
-                        if let Some(next) = extract_frame_state(&value) {
-                            frame = next;
-                        }
+                        apply_stream_update(&mut frame, &value);
                         match value
                             .get("type")
                             .and_then(Value::as_str)
@@ -314,7 +314,10 @@ fn connect_stream(socket: &str) -> Result<StreamConnection, String> {
 
 #[cfg(unix)]
 fn send_hello(writer: &Arc<Mutex<UnixStream>>) -> Result<(), String> {
-    send_json(writer, &json!({ "type": "hello", "version": 2 }))?;
+    send_json(
+        writer,
+        &json!({ "type": "hello", "version": RUNTIME_STREAM_PROTOCOL_VERSION_V2 }),
+    )?;
     Ok(())
 }
 
@@ -857,6 +860,15 @@ fn extract_frame_state(value: &Value) -> Option<FrameState> {
         .and_then(Value::as_str)
         .unwrap_or_default();
     match message_type {
+        "frame" => {
+            let lines = value.get("lines")?;
+            Some(FrameState {
+                lines: render_plain_lines(lines),
+                cursor_row: None,
+                cursor_col: None,
+                cursor_visible: true,
+            })
+        }
         "frame-v2" => {
             let lines = value.get("lines")?;
             Some(FrameState {
@@ -876,7 +888,7 @@ fn extract_frame_state(value: &Value) -> Option<FrameState> {
             })
         }
         "frame-styled" => {
-            let frame = value.get("frame")?;
+            let frame = value.get("frame").unwrap_or(value);
             let lines = frame.get("lines")?;
             let cursor = frame.get("cursor");
             Some(FrameState {
@@ -918,33 +930,159 @@ fn extract_frame_state(value: &Value) -> Option<FrameState> {
 }
 
 #[cfg(unix)]
+fn extract_patch_state(current: &FrameState, value: &Value) -> Option<FrameState> {
+    let message_type = value
+        .get("type")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    match message_type {
+        "patch" | "patch-styled" => apply_index_patch(current, value),
+        "patch-v2" => apply_patch_v2(current, value),
+        _ => None,
+    }
+}
+
+#[cfg(unix)]
+fn apply_stream_update(frame: &mut FrameState, value: &Value) {
+    if let Some(next) = extract_frame_state(value) {
+        *frame = next;
+        return;
+    }
+    if let Some(next) = extract_patch_state(frame, value) {
+        *frame = next;
+    }
+}
+
+#[cfg(unix)]
+fn apply_index_patch(current: &FrameState, value: &Value) -> Option<FrameState> {
+    let mut next = FrameState {
+        lines: current.lines.clone(),
+        cursor_row: current.cursor_row,
+        cursor_col: current.cursor_col,
+        cursor_visible: current.cursor_visible,
+    };
+    let line_count = value
+        .get("lineCount")
+        .and_then(Value::as_u64)
+        .map(|n| n as usize);
+    if let Some(count) = line_count {
+        next.lines.resize(count, String::new());
+    }
+
+    let ops = value.get("ops").and_then(Value::as_array)?;
+    for op in ops {
+        let Some(index) = op.get("index").and_then(Value::as_u64).map(|n| n as usize) else {
+            continue;
+        };
+        if let Some(count) = line_count {
+            if index >= count {
+                continue;
+            }
+        }
+        if index >= next.lines.len() {
+            next.lines.resize(index + 1, String::new());
+        }
+        let text = op.get("line").map(render_plain_line).unwrap_or_default();
+        next.lines[index] = text;
+    }
+
+    if let Some(count) = line_count {
+        next.lines.resize(count, String::new());
+    }
+    next.cursor_row = parse_cursor_row(value).or(current.cursor_row);
+    next.cursor_col = parse_cursor_col(value).or(current.cursor_col);
+    next.cursor_visible = parse_cursor_visible(value).unwrap_or(current.cursor_visible);
+    Some(next)
+}
+
+#[cfg(unix)]
+fn apply_patch_v2(current: &FrameState, value: &Value) -> Option<FrameState> {
+    let ops = value.get("ops").and_then(Value::as_array)?;
+    let mut lines = current.lines.clone();
+    for op in ops {
+        if op.get("kind").and_then(Value::as_str).unwrap_or_default() != "replace" {
+            continue;
+        }
+        let Some(start) = op.get("start").and_then(Value::as_u64).map(|n| n as usize) else {
+            continue;
+        };
+        let delete_count = op
+            .get("deleteCount")
+            .and_then(Value::as_u64)
+            .map(|n| n as usize)
+            .unwrap_or(0);
+        let insert_lines = op.get("lines").map(render_plain_lines).unwrap_or_default();
+        if start > lines.len() {
+            lines.resize(start, String::new());
+        }
+        let end = min(start.saturating_add(delete_count), lines.len());
+        lines.splice(start..end, insert_lines);
+    }
+
+    if let Some(count) = value
+        .get("lineCount")
+        .and_then(Value::as_u64)
+        .map(|n| n as usize)
+    {
+        lines.resize(count, String::new());
+    }
+
+    Some(FrameState {
+        lines,
+        cursor_row: parse_cursor_row(value).or(current.cursor_row),
+        cursor_col: parse_cursor_col(value).or(current.cursor_col),
+        cursor_visible: parse_cursor_visible(value).unwrap_or(current.cursor_visible),
+    })
+}
+
+#[cfg(unix)]
+fn parse_cursor_row(value: &Value) -> Option<u16> {
+    value
+        .get("cursorRow")
+        .and_then(Value::as_u64)
+        .map(|n| min(n, u16::MAX as u64) as u16)
+}
+
+#[cfg(unix)]
+fn parse_cursor_col(value: &Value) -> Option<u16> {
+    value
+        .get("cursorCol")
+        .and_then(Value::as_u64)
+        .map(|n| min(n, u16::MAX as u64) as u16)
+}
+
+#[cfg(unix)]
+fn parse_cursor_visible(value: &Value) -> Option<bool> {
+    value.get("cursorVisible").and_then(Value::as_bool)
+}
+
+#[cfg(unix)]
 fn render_plain_lines(lines: &Value) -> Vec<String> {
     let Some(lines_array) = lines.as_array() else {
         return vec![];
     };
 
-    let mut rendered_lines: Vec<String> = Vec::with_capacity(lines_array.len());
-    for line in lines_array {
-        if let Some(text) = line.get("text").and_then(Value::as_str) {
-            rendered_lines.push(text.to_string());
-            continue;
-        }
+    lines_array.iter().map(render_plain_line).collect()
+}
 
-        let Some(segments) = line.get("segments").and_then(Value::as_array) else {
-            rendered_lines.push(String::new());
-            continue;
-        };
-
-        let mut row = String::new();
-        for segment in segments {
-            if let Some(text) = segment.get("text").and_then(Value::as_str) {
-                row.push_str(text);
-            }
-        }
-        rendered_lines.push(row);
+#[cfg(unix)]
+fn render_plain_line(line: &Value) -> String {
+    if let Some(text) = line.as_str() {
+        return text.to_string();
     }
-
-    rendered_lines
+    if let Some(text) = line.get("text").and_then(Value::as_str) {
+        return text.to_string();
+    }
+    let Some(segments) = line.get("segments").and_then(Value::as_array) else {
+        return String::new();
+    };
+    let mut row = String::new();
+    for segment in segments {
+        if let Some(text) = segment.get("text").and_then(Value::as_str) {
+            row.push_str(text);
+        }
+    }
+    row
 }
 
 #[cfg(unix)]
@@ -1150,9 +1288,9 @@ fn default_socket_path() -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_visible_text_for_rows, compute_max_scroll_offset, compute_visible_range, is_copy_key,
-        is_switch_key, key_event_to_bytes, parse_args, reconnect_delay_ms, render_plain_lines,
-        FrameState, ScrollState,
+        apply_stream_update, build_visible_text_for_rows, compute_max_scroll_offset,
+        compute_visible_range, is_copy_key, is_switch_key, key_event_to_bytes, parse_args,
+        reconnect_delay_ms, render_plain_lines, FrameState, ScrollState,
     };
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     use serde_json::json;
@@ -1182,6 +1320,15 @@ mod tests {
     }
 
     #[test]
+    fn renders_plain_string_lines() {
+        let lines = json!(["hello", "world"]);
+        assert_eq!(
+            render_plain_lines(&lines),
+            vec!["hello".to_string(), "world".to_string()]
+        );
+    }
+
+    #[test]
     fn computes_max_scroll_offset() {
         assert_eq!(compute_max_scroll_offset(10, 10), 0);
         assert_eq!(compute_max_scroll_offset(30, 10), 20);
@@ -1196,6 +1343,88 @@ mod tests {
         assert_eq!(reconnect_delay_ms(3), 2000);
         assert_eq!(reconnect_delay_ms(4), 5000);
         assert_eq!(reconnect_delay_ms(20), 5000);
+    }
+
+    #[test]
+    fn applies_patch_styled_updates() {
+        let mut frame = FrameState {
+            lines: vec!["line-0".to_string(), "line-1".to_string()],
+            cursor_row: None,
+            cursor_col: None,
+            cursor_visible: true,
+        };
+        let patch = json!({
+            "type": "patch-styled",
+            "lineCount": 2,
+            "ops": [
+                {
+                    "index": 1,
+                    "line": { "segments": [ { "text": "line-1-updated" } ] }
+                }
+            ]
+        });
+
+        apply_stream_update(&mut frame, &patch);
+        assert_eq!(
+            frame.lines,
+            vec!["line-0".to_string(), "line-1-updated".to_string()]
+        );
+    }
+
+    #[test]
+    fn accepts_frame_styled_top_level_shape() {
+        let mut frame = FrameState::default();
+        let message = json!({
+            "type": "frame-styled",
+            "lines": [
+                { "segments": [ { "text": "prompt> " }, { "text": "ls" } ] }
+            ],
+            "cursorRow": 0,
+            "cursorCol": 10,
+            "cursorVisible": true
+        });
+
+        apply_stream_update(&mut frame, &message);
+        assert_eq!(frame.lines, vec!["prompt> ls".to_string()]);
+        assert_eq!(frame.cursor_row, Some(0));
+        assert_eq!(frame.cursor_col, Some(10));
+        assert!(frame.cursor_visible);
+    }
+
+    #[test]
+    fn applies_patch_v2_replace_and_cursor() {
+        let mut frame = FrameState {
+            lines: vec!["a".to_string(), "b".to_string(), "c".to_string()],
+            cursor_row: Some(0),
+            cursor_col: Some(0),
+            cursor_visible: true,
+        };
+        let patch = json!({
+            "type": "patch-v2",
+            "lineCount": 3,
+            "ops": [
+                {
+                    "kind": "replace",
+                    "start": 1,
+                    "deleteCount": 1,
+                    "lines": [
+                        { "segments": [ { "text": "B" } ] }
+                    ]
+                }
+            ],
+            "cursorRow": 2,
+            "cursorCol": 4,
+            "cursorVisible": false
+        });
+
+        apply_stream_update(&mut frame, &patch);
+        assert_eq!(
+            frame.lines,
+            vec!["a".to_string(), "B".to_string(), "c".to_string()]
+        );
+        assert_eq!(frame.cursor_row, Some(2));
+        assert_eq!(frame.cursor_col, Some(4));
+        assert!(!frame.cursor_visible);
     }
 
     #[test]

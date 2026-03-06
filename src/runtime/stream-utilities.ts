@@ -8,6 +8,7 @@ import type { TerminalStyledLine } from './vt-screen.js';
 export type RuntimeStreamClientState = {
   socket: Socket;
   buffer: string;
+  protocolVersion: number;
   windowId?: string;
   cols: number;
   rows: number;

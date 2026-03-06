@@ -248,7 +248,7 @@ Server reconnect expectations:
 
 - v1 clients stay functional during migration.
 - Server continues to emit v1 payloads for v1 handshakes.
-- Native client uses v2 only.
+- Native client uses v2.
 - Removal of v1 support requires separate deprecation cycle and release note.
 
 ## 14) Acceptance Criteria

@@ -17,6 +17,14 @@ import {
   type RuntimeStreamClientState,
 } from './stream-utilities.js';
 
+function isV2(client: RuntimeStreamClientState): boolean {
+  return client.protocolVersion >= 2;
+}
+
+function plainLinesToStyled(lines: string[]) {
+  return lines.map((line) => ({ segments: [{ text: line }] }));
+}
+
 export type FrameRendererOptions = {
   enablePatchDiff: boolean;
   patchThresholdRatio: number;
@@ -113,38 +121,51 @@ export function flushClientFrame(
       client.lastEmitAt = now;
       client.seq += 1;
 
-      const patch = options.enablePatchDiff
-        ? buildStyledPatch(client.lastStyledLines, styledLines)
-        : null;
-      const usePatch = !!(
-        options.enablePatchDiff
-        && client.lastStyledLines.length > 0
-        && patch
-        && patch.ops.length > 0
-        && patch.ops.length <= Math.ceil(styledLines.length * options.patchThresholdRatio)
-      );
-
-      if (usePatch && patch) {
+      if (isV2(client)) {
         send(client, {
-          type: 'patch-styled',
+          type: 'frame-v2',
           windowId: client.windowId,
           seq: client.seq,
           lineCount: styledLines.length,
-          ops: patch.ops,
-          cursorRow: styledFrame.cursorRow,
-          cursorCol: styledFrame.cursorCol,
-          cursorVisible,
-        });
-      } else {
-        send(client, {
-          type: 'frame-styled',
-          windowId: client.windowId,
-          seq: client.seq,
           lines: styledLines,
           cursorRow: styledFrame.cursorRow,
           cursorCol: styledFrame.cursorCol,
           cursorVisible,
         });
+      } else {
+        const patch = options.enablePatchDiff
+          ? buildStyledPatch(client.lastStyledLines, styledLines)
+          : null;
+        const usePatch = !!(
+          options.enablePatchDiff
+          && client.lastStyledLines.length > 0
+          && patch
+          && patch.ops.length > 0
+          && patch.ops.length <= Math.ceil(styledLines.length * options.patchThresholdRatio)
+        );
+
+        if (usePatch && patch) {
+          send(client, {
+            type: 'patch-styled',
+            windowId: client.windowId,
+            seq: client.seq,
+            lineCount: styledLines.length,
+            ops: patch.ops,
+            cursorRow: styledFrame.cursorRow,
+            cursorCol: styledFrame.cursorCol,
+            cursorVisible,
+          });
+        } else {
+          send(client, {
+            type: 'frame-styled',
+            windowId: client.windowId,
+            seq: client.seq,
+            lines: styledLines,
+            cursorRow: styledFrame.cursorRow,
+            cursorCol: styledFrame.cursorCol,
+            cursorVisible,
+          });
+        }
       }
 
       client.lastStyledLines = styledLines;
@@ -171,30 +192,44 @@ export function flushClientFrame(
   client.seq += 1;
   client.lastEmitAt = now;
 
-  const patch = options.enablePatchDiff ? buildLinePatch(client.lastLines, lines) : null;
-  const usePatch = !!(
-    options.enablePatchDiff
-    && client.lastLines.length > 0
-    && patch
-    && patch.ops.length > 0
-    && patch.ops.length <= Math.ceil(lines.length * options.patchThresholdRatio)
-  );
-
-  if (usePatch && patch) {
+  if (isV2(client)) {
     send(client, {
-      type: 'patch',
+      type: 'frame-v2',
       windowId: client.windowId,
       seq: client.seq,
       lineCount: lines.length,
-      ops: patch.ops,
+      lines: plainLinesToStyled(lines),
+      cursorRow: 0,
+      cursorCol: 0,
+      cursorVisible: true,
     });
   } else {
-    send(client, {
-      type: 'frame',
-      windowId: client.windowId,
-      seq: client.seq,
-      lines,
-    });
+    const patch = options.enablePatchDiff ? buildLinePatch(client.lastLines, lines) : null;
+    const usePatch = !!(
+      options.enablePatchDiff
+      && client.lastLines.length > 0
+      && patch
+      && patch.ops.length > 0
+      && patch.ops.length <= Math.ceil(lines.length * options.patchThresholdRatio)
+    );
+
+    if (usePatch && patch) {
+      send(client, {
+        type: 'patch',
+        windowId: client.windowId,
+        seq: client.seq,
+        lineCount: lines.length,
+        ops: patch.ops,
+      });
+    } else {
+      send(client, {
+        type: 'frame',
+        windowId: client.windowId,
+        seq: client.seq,
+        lines,
+      });
+    }
   }
+
   client.lastLines = lines;
 }
