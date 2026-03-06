@@ -1,219 +1,113 @@
-# Discode Architecture (Current)
-
-Last updated: 2026-02-20  
-Target version: 0.7.5
-
-## 1. Overview
-
-discode is a global daemon bridge that connects:
-
-- Messaging platforms: Discord and Slack
-- Agent CLIs: Claude, Gemini, OpenCode
-- Local runtime backends: `tmux` or `pty-rust`
-
-Current architecture principles:
-
-- One global daemon owns routing, integrations, runtime control, and stream transport
-- CLI commands mutate config/state and orchestrate project lifecycle
-- TUI is a client of daemon runtime APIs and the runtime stream socket
-
-## 2. Process Model
-
-Main processes:
-
-- `discode daemon` starts a detached singleton (`~/.discode/daemon.pid`, `~/.discode/daemon.log`)
-- Daemon entrypoint is `src/daemon-entry.ts` -> `src/index.ts` (`AgentBridge`)
-- Daemon listens on loopback HTTP (`127.0.0.1:${HOOK_SERVER_PORT}`)
-- Daemon also serves runtime stream over UDS/named pipe
-
-Runtime notes:
-
-- Built JS daemon entrypoints run with Node (for `node-pty` compatibility)
-- TS source fallback runs with Bun
-- On macOS, daemon uses `caffeinate -ims` wrapper to avoid sleep suspension
-
-## 3. Runtime Abstraction
-
-`AgentRuntime` interface: `src/runtime/interface.ts`
-
-Implementations:
-
-- `TmuxRuntime` (`src/runtime/tmux-runtime.ts`) via `TmuxManager`
-- `PtyRustRuntime` (`src/runtime/pty-rust-runtime.ts`) Rust sidecar RPC runtime (sidecar-only)
-
-Runtime selection:
-
-- Config key: `runtimeMode: 'tmux' | 'pty-rust'`
-- Sources: `~/.discode/config.json`, `DISCODE_RUNTIME_MODE`
-- Loader default: `tmux`
-- Optional sidecar binary override: `DISCODE_PTY_RUST_SIDECAR_BIN`
-
-## 4. Core Components
-
-- `AgentBridge` (`src/index.ts`): wiring for messaging, routing, hook server, stream server, bootstrap
-- `BridgeProjectBootstrap` (`src/bridge/project-bootstrap.ts`): rebuild channel mappings and reinstall agent integrations
-- `BridgeMessageRouter` (`src/bridge/message-router.ts`): inbound message routing, attachment handling, submit timing, pending tracking
-- `BridgeHookServer` (`src/bridge/hook-server.ts`): HTTP control plane + hook ingress (`/opencode-event`, `/send-files`)
-- `RuntimeControlPlane` (`src/runtime/control-plane.ts`): runtime window listing/focus/input/buffer/stop
-- `RuntimeStreamServer` (`src/runtime/stream-server.ts`): low-latency frame stream for TUI
-- `PendingMessageTracker` (`src/bridge/pending-message-tracker.ts`): reaction lifecycle (`hourglass` -> `check`/`x`)
-- `StateManager` (`src/state/index.ts`): persisted projects/instances
-
-## 5. Data Flows
-
-### 5.1 Messaging -> Agent
-
-1. Discord/Slack message arrives in mapped channel
-2. Router resolves project instance by `instanceId` or `channelId`
-3. Attachments are downloaded into project (`.discode/files`), then `[file:/abs/path]` markers are appended
-4. If instance is containerized, downloaded files are injected into container workspace
-5. Input is sanitized (non-empty, <= 10000 chars, null-byte stripped)
-6. Runtime submission uses type-then-enter with per-agent delay
-
-Submission timing:
-
-- OpenCode: `AGENT_DISCORD_OPENCODE_SUBMIT_DELAY_MS` (default 75ms)
-- Others: `DISCODE_SUBMIT_DELAY_MS` (default 300ms)
-
-### 5.2 Agent -> Messaging
-
-1. Agent integrations post events to daemon `POST /opencode-event` (name kept for compatibility)
-2. `session.idle` sends assistant text to mapped channel (chunked by platform)
-3. File paths are extracted from full turn text, validated inside project root, path strings stripped from text output, then files uploaded
-4. `session.error` posts warning and marks pending message as failed
-
-### 5.3 Pending and Fallback Delivery
-
-- Incoming user messages get pending reaction updates
-- When stop hooks do not resolve (for interactive terminal states), router runs stable-buffer fallback checks and may post captured terminal block
-
-### 5.4 TUI Runtime I/O
-
-1. TUI connects to runtime stream socket
-2. TUI subscribes/focuses windows and receives pushed frames (`frame-styled` or `patch-styled`)
-3. TUI sends raw key bytes and resize events over stream
-4. Stream transport is required for runtime I/O (HTTP fallback for frame transport is removed)
-
-## 6. Daemon HTTP Control Plane
-
-Implemented in `BridgeHookServer`:
-
-- `POST /reload` - rebuild channel mappings from state
-- `POST /send-files` - send validated files to mapped channel
-- `POST /opencode-event` - hook ingress from agents
-
-Runtime control endpoints:
-
-- `GET /runtime/windows`
-- `POST /runtime/focus`
-- `POST /runtime/input`
-- `GET /runtime/buffer?windowId=...&since=...`
-- `POST /runtime/stop`
-- `POST /runtime/ensure`
-
-Control response versioning:
-
-- JSON responses from `/runtime/windows` and `/runtime/buffer` include `protocolVersion`
-
-Body limit:
-
-- 256 KiB max request payload (`413 Payload too large`)
-
-## 7. Runtime Stream Plane
-
-Transport:
-
-- Unix: `~/.discode/runtime.sock`
-- Windows: `\\.\pipe\discode-runtime`
-
-Client -> daemon messages:
-
-- `hello(version)`, `subscribe`, `focus`, `input(bytesBase64)`, `resize`
-
-Daemon -> client messages:
-
-- `frame`, `patch`
-- `frame-styled`, `patch-styled`
-- `window-exit`, `error`
-- `hello(ok, streamProtocolVersion)` handshake response
-
-Optional optimization:
-
-- `DISCODE_STREAM_PATCH_DIFF=1` enables patch-diff emission preference
-
-## 8. Runtime-Mode CLI Behavior
-
-- `new`
-  - Ensures daemon
-  - Creates/resumes instance state and channel mapping
-  - `tmux`: starts/attaches tmux window and can bootstrap TUI pane
-- `pty-rust`: ensures runtime window in daemon via `/runtime/ensure`; attach opens TUI
-- `attach`
-  - `tmux`: attaches/switches tmux target
-- `pty-rust`: focuses runtime window then launches TUI
-- `stop`
-  - `tmux`: kills tmux window/session + state/channel cleanup
-- `pty-rust`: stops runtime window via `/runtime/stop` + state/channel cleanup
-- `status` / `list`
-  - Runtime-aware active window detection (`tmux` session/window checks vs `/runtime/windows`)
-- `daemon`
-  - `start | restart | stop | status`
-
-## 9. Container Isolation Mode
-
-Enabled by config (`containerEnabled`) or `discode new --container`.
-
-Per-instance behavior:
-
-- Creates Docker container from managed image
-- Injects credentials and optional plugin/config assets
-- Starts agent via `docker start -ai <containerId>` in runtime window
-- Runs periodic host sync (`ContainerSync`) for changed files
-- On stop: final sync + container stop/remove
-
-Chrome MCP bridge support:
-
-- Daemon may start `ChromeMcpProxy` on `hookServerPort + 1`
-- Container config is patched to reach host bridge via `host.docker.internal`
-
-## 10. TUI Status (OpenTUI)
-
-Current TUI (`bin/tui.tsx`) supports:
-
-- Stream-based terminal rendering with styled segments and cursor updates
-- Prefix-key workflow (`Ctrl+b`), quick switch (`prefix + 1..9`)
-- Runtime input mode vs command mode
-- Slash commands (`/new`, `/onboard`, `/list`, `/projects`, `/config`, `/stop`, `/help`)
-- Command palette, config dialog, and project/session sidebars
-- Clipboard copy for text selection
-
-## 11. State and Config
-
-### 11.1 Config (`~/.discode/config.json`)
-
-Important keys:
-
-- Messaging: `token`, `serverId`, `messagingPlatform`, `slackBotToken`, `slackAppToken`
-- Runtime: `runtimeMode`, `hookServerPort`
-- Agent defaults/policy: `defaultAgentCli`, `opencodePermissionMode`
-- Stop behavior: `keepChannelOnStop`
-- Container: `containerEnabled`, `containerSocketPath`, `containerSyncIntervalMs`
-- Telemetry: `telemetryEnabled`, `telemetryEndpoint`, `telemetryInstallId`
-
-### 11.2 State (`~/.discode/state.json`)
-
-- Global: `guildId`, `slackWorkspaceId`
-- Projects keyed by `projectName`
-- Per project: `projectPath`, `tmuxSession`, timestamps
-- Per instance: `instanceId`, `agentType`, `tmuxWindow`, `channelId`, `eventHook`, optional container metadata
-
-Compatibility:
-
-- Legacy `tmux*`/`discordChannels` maps are still normalized for backward compatibility
-
-## 12. Operational Notes
-
-- Daemon is global singleton; restart after runtime/config/integration changes
-- In `pty-rust` mode, daemon restores missing runtime windows from persisted state at startup
-- Agent integrations are reinstalled during bootstrap to keep hooks/plugins consistent
-- CLI includes optional telemetry (opt-in) and interactive update prompt for npm releases
+# Discode Architecture
+
+This is the top-level architecture map for the repository.
+It is the canonical entrypoint for system domains, package boundaries, dependency direction, and major entrypoints.
+
+## System Boundary
+
+Discode is a local-first bridge for running agent CLIs in local runtime sessions and relaying control/output through Discord or Slack.
+
+Core responsibilities:
+
+- CLI lifecycle and operator workflows
+- Global daemon orchestration
+- Messaging ingress and egress
+- Runtime control for `tmux` and `pty-rust`
+- User-facing TUI and landing/docs site
+- Release packaging for npm and native helper binaries
+
+## Repository Domains
+
+| Domain | Paths | Responsibility |
+| --- | --- | --- |
+| CLI and TUI entrypoints | `bin/` | User commands and interactive terminal UI |
+| TypeScript application core | `src/` | Daemon, routing, runtime abstractions, config, state, integrations |
+| Rust daemon | `daemon-rs/` | Native daemon implementation and packaging work |
+| Rust runtime sidecar | `sidecar/pty-rust/` | PTY sidecar used by `pty-rust` runtime mode |
+| Rust runtime client | `runtime-client-rs/` | Client binary for runtime transport and packaging |
+| Web and docs site | `site/` | Landing page and published documentation site |
+| Telemetry worker | `workers/telemetry-proxy/` | Cloudflare Worker for telemetry ingestion |
+| Tests | `tests/` | Unit, integration, and targeted e2e coverage |
+| Maintainer docs | `docs/` | Product specs, design docs, plans, runbooks, references |
+
+## Package Boundaries
+
+- `bin/discode.ts` is the CLI entrypoint.
+- `bin/tui.tsx` is the interactive terminal UI entrypoint.
+- `src/cli/**` handles command parsing and user-facing command flows.
+- `src/app/**` holds shared application orchestration.
+- `src/bridge/**` owns daemon runtime coordination, hook ingress, routing, and pending delivery.
+- `src/runtime/**` defines runtime interfaces, control plane, and stream server behavior.
+- `src/{discord,slack,messaging}/**` own platform transport concerns.
+- `src/{config,state,policy,infra}/**` hold configuration, persisted state, shared policy, and low-level infrastructure utilities.
+
+Detailed dependency rules live in [docs/MODULE_BOUNDARIES.md](/Users/dev/git/discode/docs/MODULE_BOUNDARIES.md).
+
+## Dependency Direction
+
+Primary TypeScript flow:
+
+`bin/discode.ts` -> `src/cli/**` -> `src/app/**` -> `src/{bridge,runtime,state,config,policy,infra,messaging,...}`
+
+Operational constraints:
+
+- CLI modules should not be imported by lower layers.
+- Shared rules belong in `src/policy/**`, not duplicated in command or daemon code.
+- Side-effecting integrations stay in app, bridge, runtime, messaging, or infra layers.
+- Rust components should depend on stable contracts and integration behavior, not ad hoc CLI assumptions.
+
+## Major Entrypoints
+
+- CLI:
+  `bin/discode.ts`
+- TUI:
+  `bin/tui.tsx`
+- Daemon bootstrap:
+  `src/daemon-entry.ts`
+- Daemon composition root:
+  `src/index.ts`
+- Runtime interface:
+  `src/runtime/interface.ts`
+- Landing page:
+  `site/index.html`
+- Site deployment:
+  `npm run pages:deploy`
+
+## High-Value Runtime Paths
+
+- Messaging -> agent routing:
+  `src/bridge/message-router.ts`
+- Hook ingress and control plane:
+  `src/bridge/hook-server.ts`
+- Runtime control and stream transport:
+  `src/runtime/control-plane.ts`
+  `src/runtime/stream-server.ts`
+- Project bootstrap and recovery:
+  `src/bridge/project-bootstrap.ts`
+- Persisted state:
+  `src/state/`
+- Config loading:
+  `src/config/`
+
+## Canonical Supporting Docs
+
+- Design rationale:
+  [docs/design-docs/index.md](/Users/dev/git/discode/docs/design-docs/index.md)
+- Product behavior:
+  [docs/product-specs/index.md](/Users/dev/git/discode/docs/product-specs/index.md)
+- Planning and execution:
+  [docs/PLANS.md](/Users/dev/git/discode/docs/PLANS.md)
+- Reliability and daemon operations:
+  [docs/RELIABILITY.md](/Users/dev/git/discode/docs/RELIABILITY.md)
+  [docs/references/daemon-operations.md](/Users/dev/git/discode/docs/references/daemon-operations.md)
+- Security:
+  [docs/SECURITY.md](/Users/dev/git/discode/docs/SECURITY.md)
+
+## Update Triggers
+
+Update this file when any of the following change:
+
+- Top-level package boundaries
+- Dependency direction or layering rules
+- Runtime mode ownership or entrypoints
+- Major daemon, CLI, TUI, or site entrypoints
