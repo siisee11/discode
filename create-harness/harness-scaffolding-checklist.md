@@ -1,6 +1,6 @@
 # Harness Scaffolding Checklist
 
-Apply the following two phases in order to scaffold a complete harness engineering system for this repository.
+Apply the following phases in order to scaffold a complete harness engineering system for this repository.
 
 ---
 
@@ -13,7 +13,6 @@ This phase sets up the documentation hierarchy:
 - [ ] `AGENTS.md` — compact table-of-contents entrypoint (~100 lines, navigation only)
 - [ ] `ARCHITECTURE.md` — top-level map of domains, boundaries, dependencies, entrypoints
 - [ ] `docs/PLANS.md`
-- [ ] `docs/OBSERVABILITY.md`
 - [ ] `docs/design-docs/index.md`
 - [ ] `docs/exec-plans/active/`
 - [ ] `docs/exec-plans/completed/`
@@ -30,11 +29,46 @@ Key rules:
 
 ---
 
-## Phase 2: Harness Engineering Audit
+## Phase 2: Execution Environment Setup
+
+Apply the instructions in `execution-env-setup.md`.
+
+This phase makes the app bootable per Git worktree for isolated development:
+
+- [ ] Worktree-aware boot flow with derived worktree ID
+- [ ] Isolated runtime resources per worktree (ports, temp dirs, logs, etc.)
+- [ ] Single command to boot the app for the current worktree
+- [ ] Launch contract returning metadata (app URL, port, healthcheck status, worktree ID)
+- [ ] Healthcheck-based readiness (no blind sleeps)
+- [ ] `agent-browser` skill installed for UI investigation
+- [ ] Example reproducibility and validation flow
+
+---
+
+## Phase 3: Observability Stack
+
+Apply the instructions in `observability-stack-setup.md`.
+
+This phase sets up ephemeral, per-worktree telemetry so the agent can query logs, metrics, and traces:
+
+- [ ] Vector config template for telemetry collection and fan-out
+- [ ] Victoria Logs — log storage with LogQL API
+- [ ] Victoria Metrics — metrics storage with PromQL API
+- [ ] Victoria Traces — trace storage with TraceQL API
+- [ ] All ports and data dirs derived from worktree ID
+- [ ] App instrumented with OpenTelemetry SDK (logs, metrics, traces to Vector)
+- [ ] `scripts/observability/start.sh` — starts the stack with health checks
+- [ ] `scripts/observability/stop.sh` — tears down the stack and cleans up
+- [ ] `scripts/observability/query.sh` — convenience wrapper for LogQL/PromQL/TraceQL queries
+- [ ] Integrated with worktree app boot flow
+
+---
+
+## Phase 4: Harness Engineering Audit
 
 Apply the instructions in `implement-harness-audit.md`.
 
-This phase sets up deterministic build/test/lint workflows and the audit that verifies them:
+This phase sets up deterministic build/test/lint workflows and the audit that verifies everything:
 
 - [ ] `Makefile.harness` with smoke/test/lint/typecheck/check/ci targets
 - [ ] `Makefile` includes `Makefile.harness`
