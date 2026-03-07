@@ -64,7 +64,24 @@ This phase sets up ephemeral, per-worktree telemetry so the agent can query logs
 
 ---
 
-## Phase 4: Harness Engineering Audit
+## Phase 4: Enforce Invariants
+
+Apply the instructions in `enforce-invariants.md`.
+
+This phase enforces architectural boundaries and taste mechanically via custom linters and structural tests:
+
+- [ ] Machine-readable architecture rules file (dependency directions, allowed edges)
+- [ ] Dependency direction linter — verifies imports respect layer ordering
+- [ ] Boundary parsing linter — verifies external data is validated at boundaries
+- [ ] Taste invariant linters (structured logging, naming conventions, file size limits)
+- [ ] All lint error messages include clear remediation instructions for agents
+- [ ] Structural tests for domain completeness and dependency graph validation
+- [ ] Cross-cutting boundary tests (shared concerns only via Providers interface)
+- [ ] Integrated into `make lint` and `make test`
+
+---
+
+## Phase 5: Harness Engineering Audit
 
 Apply the instructions in `implement-harness-audit.md`.
 
