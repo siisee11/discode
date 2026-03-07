@@ -1,39 +1,68 @@
 # AGENTS
 
-## Release
+`AGENTS.md` is the repository map, not the repository manual.
+Start here, then open only the documents needed for the task at hand.
 
-Release 작업 시 아래 항목은 필수입니다.
+Reference structure:
 
-- 웹사이트 landing page의 `new` 문구를 최신 릴리즈 내용으로 업데이트한다. (`site/index.html`)
-- npm에 릴리즈 버전을 반드시 publish한다. (메타 패키지 `@siisee11/discode`와 플랫폼 패키지 `@siisee11/discode-*` 모두)
-- GitHub Releases 페이지에 릴리즈를 등록하고, changelog를 포함해 배포 아티팩트를 업로드한다.
-
-## Web 배포
-
-- `site/**` 웹 코드를 변경했다면 배포까지 진행한다.
-- 배포 명령: `npm run pages:deploy`
-
-## Daemon 재시작
-
-아래 코드를 수정했다면 daemon을 재시작한다.
-
-- `src/index.ts`, `src/daemon-entry.ts`
-- `src/capture/**`, `src/discord/**`, `src/tmux/**`, `src/state/**`, `src/config/**`, `src/agents/**`
-- 그 외 daemon 실행 경로에서 import되는 `src/**` 파일
-
-아래 변경은 daemon 재시작이 필요 없다.
-
-- `site/**`, `README.md` 등 문서/랜딩 페이지 변경
-- `tests/**` 변경
-- `scripts/**`만 변경한 경우
-
-주의:
-
-- `discode-src onboard`는 이미 실행 중인 글로벌 daemon을 재사용하므로 코드 변경이 자동 반영되지 않는다.
-- 코드 변경 후 아래 명령으로 수동 재시작한다.
-
-```bash
-discode-src daemon stop
-discode-src daemon start
-discode-src daemon status
+```text
+AGENTS.md
+ARCHITECTURE.md
+docs/
+├── design-docs/
+│   ├── index.md
+│   ├── core-beliefs.md
+│   └── ...
+├── exec-plans/
+│   ├── active/
+│   ├── completed/
+│   └── tech-debt-tracker.md
+├── generated/
+│   └── db-schema.md
+├── product-specs/
+│   ├── index.md
+│   ├── new-user-onboarding.md
+│   └── ...
+├── references/
+│   ├── design-system-reference-llms.txt
+│   ├── nixpacks-llms.txt
+│   ├── uv-llms.txt
+│   └── ...
+├── DESIGN.md
+├── FRONTEND.md
+├── PLANS.md
+├── PRODUCT_SENSE.md
+├── QUALITY_SCORE.md
+├── RELIABILITY.md
+└── SECURITY.md
 ```
+
+## Start Here
+
+- System map and entrypoints: [`ARCHITECTURE.md`](ARCHITECTURE.md)
+- Design rationale and decision records: [`docs/DESIGN.md`](docs/DESIGN.md)
+- Feature intent and product behavior: [`docs/PRODUCT_SENSE.md`](docs/PRODUCT_SENSE.md)
+- Execution plans and technical debt: [`docs/PLANS.md`](docs/PLANS.md)
+- Reliability expectations and operational checks: [`docs/RELIABILITY.md`](docs/RELIABILITY.md)
+- Security model and secret-handling rules: [`docs/SECURITY.md`](docs/SECURITY.md)
+- UI surfaces and site/TUI guidance: [`docs/FRONTEND.md`](docs/FRONTEND.md)
+- Quality bar and current verification posture: [`docs/QUALITY_SCORE.md`](docs/QUALITY_SCORE.md)
+
+## Task Routing
+
+- Product questions or behavior changes: [`docs/product-specs/index.md`](docs/product-specs/index.md)
+- Architecture tradeoffs or domain boundaries: [`docs/design-docs/index.md`](docs/design-docs/index.md)
+- Release, deployment, or daemon operations: [`docs/operations/index.md`](docs/operations/index.md)
+- Contracts and low-level references: [`docs/references/index.md`](docs/references/index.md)
+- Checked-in execution plans: [`docs/exec-plans/active/README.md`](docs/exec-plans/active/README.md)
+- Completed execution history: [`docs/exec-plans/completed/README.md`](docs/exec-plans/completed/README.md)
+- Generated repository facts: [`docs/generated/db-schema.md`](docs/generated/db-schema.md)
+
+## Working Rules
+
+- Keep `AGENTS.md` short and stable. Do not add substantive project knowledge here.
+- Update the canonical document for the topic you changed, not just the nearest README.
+- Prefer small, focused documents with indexes over long catch-all documents.
+- When a doc stops matching the code, fix the doc or delete it; do not leave stale guidance in place.
+- If a task needs a durable implementation plan, add it under `docs/exec-plans/active/` and move it to `completed/` when shipped.
+- If you find guidance that only exists in chat or tribal knowledge, promote it into the appropriate canonical doc under `docs/`.

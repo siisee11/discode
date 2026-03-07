@@ -364,8 +364,9 @@ Worker source: `workers/telemetry-proxy`
 
 ## Development
 
-Architecture overview: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+Architecture overview: [ARCHITECTURE.md](ARCHITECTURE.md)
 Module boundaries: [docs/MODULE_BOUNDARIES.md](docs/MODULE_BOUNDARIES.md)
+Documentation maps: [docs/DESIGN.md](docs/DESIGN.md), [docs/PRODUCT_SENSE.md](docs/PRODUCT_SENSE.md), [docs/PLANS.md](docs/PLANS.md)
 
 ### Building
 
