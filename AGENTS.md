@@ -1,79 +1,39 @@
 # AGENTS
 
-This file is the repository navigation layer.
-It should stay short, stable, and high-signal.
+## Release
 
-Do not turn this file into a manual.
-When guidance becomes detailed, move it into the canonical document and link it here.
+Release 작업 시 아래 항목은 필수입니다.
 
-## Operating Principles
+- 웹사이트 landing page의 `new` 문구를 최신 릴리즈 내용으로 업데이트한다. (`site/index.html`)
+- npm에 릴리즈 버전을 반드시 publish한다. (메타 패키지 `@siisee11/discode`와 플랫폼 패키지 `@siisee11/discode-*` 모두)
+- GitHub Releases 페이지에 릴리즈를 등록하고, changelog를 포함해 배포 아티팩트를 업로드한다.
 
-- Read the smallest set of documents that can answer the task.
-- Prefer canonical docs over duplicated notes or old summaries.
-- Keep instructions close to the code or workflow they describe.
-- If behavior changes, update the source-of-truth doc instead of adding exceptions here.
+## Web 배포
 
-## Read Order
+- `site/**` 웹 코드를 변경했다면 배포까지 진행한다.
+- 배포 명령: `npm run pages:deploy`
 
-1. Start with [README.md](/Users/dev/git/discode/README.md) for product overview and CLI usage.
-2. Read [ARCHITECTURE.md](/Users/dev/git/discode/ARCHITECTURE.md) for system domains, entrypoints, and dependency direction.
-3. Jump to the most specific indexed doc for the task.
+## Daemon 재시작
 
-## Task Routing
+아래 코드를 수정했다면 daemon을 재시작한다.
 
-- Product or feature behavior:
-  [docs/product-specs/index.md](/Users/dev/git/discode/docs/product-specs/index.md)
-  [docs/PRODUCT_SENSE.md](/Users/dev/git/discode/docs/PRODUCT_SENSE.md)
-- Architecture, refactors, runtime design:
-  [ARCHITECTURE.md](/Users/dev/git/discode/ARCHITECTURE.md)
-  [docs/design-docs/index.md](/Users/dev/git/discode/docs/design-docs/index.md)
-  [docs/MODULE_BOUNDARIES.md](/Users/dev/git/discode/docs/MODULE_BOUNDARIES.md)
-- Multi-step implementation or ambiguous work:
-  [docs/PLANS.md](/Users/dev/git/discode/docs/PLANS.md)
-  [docs/exec-plans/active/README.md](/Users/dev/git/discode/docs/exec-plans/active/README.md)
-  [docs/exec-plans/tech-debt-tracker.md](/Users/dev/git/discode/docs/exec-plans/tech-debt-tracker.md)
-- Release, deploy, and daemon operations:
-  [docs/references/index.md](/Users/dev/git/discode/docs/references/index.md)
-  [docs/references/release-runbook.md](/Users/dev/git/discode/docs/references/release-runbook.md)
-  [docs/references/daemon-operations.md](/Users/dev/git/discode/docs/references/daemon-operations.md)
-- Frontend or landing page work:
-  [docs/FRONTEND.md](/Users/dev/git/discode/docs/FRONTEND.md)
-- Reliability, runtime recovery, restart policy:
-  [docs/RELIABILITY.md](/Users/dev/git/discode/docs/RELIABILITY.md)
-- Security, secrets, local trust boundaries:
-  [docs/SECURITY.md](/Users/dev/git/discode/docs/SECURITY.md)
+- `src/index.ts`, `src/daemon-entry.ts`
+- `src/capture/**`, `src/discord/**`, `src/tmux/**`, `src/state/**`, `src/config/**`, `src/agents/**`
+- 그 외 daemon 실행 경로에서 import되는 `src/**` 파일
 
-## Document Priority
+아래 변경은 daemon 재시작이 필요 없다.
 
-Use the most specific applicable document in this order:
+- `site/**`, `README.md` 등 문서/랜딩 페이지 변경
+- `tests/**` 변경
+- `scripts/**`만 변경한 경우
 
-1. Feature spec or execution plan for the exact task
-2. Top-level map docs such as [ARCHITECTURE.md](/Users/dev/git/discode/ARCHITECTURE.md) and the `docs/*.md` topic guides
-3. Focused reference or runbook docs under `docs/references/`
-4. README and user-facing site docs
+주의:
 
-If two docs disagree, prefer the more specific doc and then fix the older one.
+- `discode-src onboard`는 이미 실행 중인 글로벌 daemon을 재사용하므로 코드 변경이 자동 반영되지 않는다.
+- 코드 변경 후 아래 명령으로 수동 재시작한다.
 
-## Canonical Maps
-
-- Architecture map:
-  [ARCHITECTURE.md](/Users/dev/git/discode/ARCHITECTURE.md)
-- Design rationale and decision log:
-  [docs/DESIGN.md](/Users/dev/git/discode/docs/DESIGN.md)
-  [docs/design-docs/index.md](/Users/dev/git/discode/docs/design-docs/index.md)
-- Product behavior:
-  [docs/PRODUCT_SENSE.md](/Users/dev/git/discode/docs/PRODUCT_SENSE.md)
-  [docs/product-specs/index.md](/Users/dev/git/discode/docs/product-specs/index.md)
-- Planning and debt tracking:
-  [docs/PLANS.md](/Users/dev/git/discode/docs/PLANS.md)
-  [docs/exec-plans/tech-debt-tracker.md](/Users/dev/git/discode/docs/exec-plans/tech-debt-tracker.md)
-- Quality, reliability, and security:
-  [docs/QUALITY_SCORE.md](/Users/dev/git/discode/docs/QUALITY_SCORE.md)
-  [docs/RELIABILITY.md](/Users/dev/git/discode/docs/RELIABILITY.md)
-  [docs/SECURITY.md](/Users/dev/git/discode/docs/SECURITY.md)
-
-## Update Rules
-
-- Keep this file as a table of contents, not a rule dump.
-- Add new topics to the relevant index before adding more prose here.
-- When creating a new canonical doc, link it from the nearest index and from this file only if it changes repo-level navigation.
+```bash
+discode-src daemon stop
+discode-src daemon start
+discode-src daemon status
+```
