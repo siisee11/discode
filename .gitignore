@@ -17,6 +17,7 @@ opencode-ref/
 
 dmux/
 zellij/
+harness-engineering-skill/
 
 sidecar/pty-rust/target/
 sidecar/pty-rust/Cargo.lock
