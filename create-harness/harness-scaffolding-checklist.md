@@ -81,7 +81,24 @@ This phase enforces architectural boundaries and taste mechanically via custom l
 
 ---
 
-## Phase 5: Harness Engineering Audit
+## Phase 5: Recurring Cleanup Process
+
+Apply the instructions in `recurring-cleanup.md`.
+
+This phase encodes golden principles and builds automated garbage collection for technical debt:
+
+- [ ] `golden-principles.yaml` — machine-readable principle definitions with detection and remediation
+- [ ] `scripts/cleanup/scan.sh` — scans for violations, outputs JSON report
+- [ ] `scripts/cleanup/grade.sh` — computes and tracks quality grade
+- [ ] `scripts/cleanup/fix.sh` — generates focused, small cleanup PRs
+- [ ] `.github/workflows/recurring-cleanup.yml` — daily scheduled scan, grade update, and PR generation
+- [ ] `make scan` and `make grade` targets in `Makefile.harness`
+- [ ] Error-severity violations integrated into `make lint`
+- [ ] Quality grade tracked in `docs/generated/quality-grade.json`
+
+---
+
+## Phase 6: Harness Engineering Audit
 
 Apply the instructions in `implement-harness-audit.md`.
 

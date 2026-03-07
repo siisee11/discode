@@ -1,0 +1,283 @@
+# Implement Recurring Cleanup Process
+
+Build a recurring, automated cleanup system that encodes golden principles into the repository and continuously enforces them. This functions like garbage collection for technical debt — human taste is captured once, then enforced continuously on every line of code.
+
+The goal: on a regular cadence, background tasks scan for deviations from golden principles, update quality grades, and open targeted refactoring pull requests. Most of these PRs should be reviewable in under a minute and safe to automerge.
+
+---
+
+## Step 1: Define golden principles
+
+Before building automation, codify the golden principles for this repository. These are opinionated, mechanical rules that keep the codebase legible and consistent for future agent runs.
+
+Explore the codebase and define principles in a machine-readable file (`golden-principles.yaml` or similar). Each principle should have:
+
+- **id**: Short identifier (e.g., `prefer-shared-utils`, `validate-boundaries`)
+- **description**: What the principle enforces and why
+- **detection**: How to find violations (grep pattern, AST rule, file structure check, etc.)
+- **remediation**: What the fix looks like — specific enough for an agent to act on
+- **severity**: `warn` or `error` — whether a violation blocks merge or just opens a cleanup PR
+- **automerge**: Whether cleanup PRs for this principle are safe to automerge
+
+Example principles to start with (adapt to this project):
+
+```yaml
+principles:
+  - id: prefer-shared-utils
+    description: >
+      Use shared utility packages over hand-rolled helpers.
+      Keeps invariants centralized and avoids duplicate logic.
+    detection: >
+      Find files that re-implement logic already available in shared utils.
+      Look for duplicate helper functions, hand-rolled parsers for known formats,
+      or utility functions defined locally instead of imported from shared packages.
+    remediation: >
+      Replace the local implementation with an import from the shared utility package.
+      If no shared utility exists yet, extract the local helper into the shared package
+      and update all call sites.
+    severity: warn
+    automerge: true
+
+  - id: validate-boundaries
+    description: >
+      Never probe data shapes by guessing. Validate at boundaries or rely on typed SDKs.
+      The agent must not build on assumed shapes.
+    detection: >
+      Find boundary code (API handlers, external integrations, webhook receivers)
+      that accesses fields without prior validation or type narrowing.
+      Look for raw property access on untyped inputs, missing schema validation,
+      or any-typed parameters being destructured without checks.
+    remediation: >
+      Add schema validation at the boundary using the project's validation library.
+      Parse the input into a typed model before passing it to internal code.
+    severity: error
+    automerge: false
+
+  - id: no-dead-code
+    description: >
+      Remove unused exports, unreachable branches, and stale feature flags.
+      Dead code misleads agents into thinking it's still relevant.
+    detection: >
+      Find exports with no importers, functions with no call sites,
+      and feature flag checks for flags that are permanently on/off.
+    remediation: >
+      Delete the dead code. If it was a public API, verify no external consumers exist first.
+    severity: warn
+    automerge: true
+
+  - id: consistent-error-handling
+    description: >
+      All errors must be handled explicitly. No swallowed catches, no ignored rejections.
+      Error paths must log structured context.
+    detection: >
+      Find empty catch blocks, catch blocks that only re-throw without context,
+      and unhandled promise rejections.
+    remediation: >
+      Add structured error logging with relevant context. If the error is intentionally
+      ignored, add an explicit comment explaining why.
+    severity: warn
+    automerge: true
+
+  - id: no-inline-secrets
+    description: >
+      No hardcoded secrets, API keys, tokens, or credentials in source code.
+    detection: >
+      Scan for patterns matching API keys, tokens, passwords, and connection strings.
+      Check for high-entropy strings in non-test code.
+    remediation: >
+      Move the value to environment variables or a secrets manager.
+      Reference it through the project's config layer.
+    severity: error
+    automerge: false
+```
+
+Add principles specific to this project's conventions. The list should grow over time as new patterns are identified.
+
+---
+
+## Step 2: Build the scanner
+
+Create `scripts/cleanup/scan.sh` (or equivalent) that:
+
+1. Reads the golden principles file
+2. For each principle, runs the detection logic against the codebase
+3. Outputs a structured report of all violations found
+
+The report format should be JSON:
+
+```json
+{
+  "timestamp": "2025-01-15T04:00:00Z",
+  "violations": [
+    {
+      "principle_id": "prefer-shared-utils",
+      "file": "src/billing/utils/formatCurrency.ts",
+      "line": 12,
+      "description": "Local formatCurrency duplicates shared/utils/currency.ts",
+      "severity": "warn",
+      "remediation": "Replace with import from @shared/utils/currency"
+    }
+  ],
+  "summary": {
+    "total": 5,
+    "by_severity": { "warn": 4, "error": 1 },
+    "by_principle": { "prefer-shared-utils": 2, "no-dead-code": 3 }
+  }
+}
+```
+
+The scanner should be fast — it runs frequently. Prefer static analysis (grep, AST parsing, import graph analysis) over runtime checks.
+
+---
+
+## Step 3: Build the quality grader
+
+Create `scripts/cleanup/grade.sh` (or equivalent) that:
+
+1. Runs the scanner
+2. Computes a quality grade for the codebase based on violation counts and severities
+3. Writes the grade to a trackable file (e.g., `docs/generated/quality-grade.json`)
+
+The grade file should include:
+
+```json
+{
+  "grade": "B+",
+  "score": 87,
+  "timestamp": "2025-01-15T04:00:00Z",
+  "trend": "improving",
+  "breakdown": {
+    "prefer-shared-utils": { "violations": 2, "max_score": 15, "score": 11 },
+    "validate-boundaries": { "violations": 0, "max_score": 25, "score": 25 },
+    "no-dead-code": { "violations": 3, "max_score": 20, "score": 14 }
+  },
+  "previous": {
+    "grade": "B",
+    "score": 83,
+    "timestamp": "2025-01-14T04:00:00Z"
+  }
+}
+```
+
+The grading formula should be configurable. Principles with `severity: error` should weigh more heavily than `warn`.
+
+---
+
+## Step 4: Build the cleanup PR generator
+
+Create `scripts/cleanup/fix.sh` (or equivalent) that:
+
+1. Runs the scanner to find violations
+2. Groups violations by principle
+3. For each group, creates a focused branch and applies the fix
+4. Opens a pull request with:
+   - Title: `cleanup(<principle_id>): <short description>`
+   - Body: which principle was violated, what files were changed, and why
+   - Label: `cleanup`, `automerge` (if the principle allows it)
+
+Each PR should be small and focused — one principle, one logical group of fixes. The goal is PRs reviewable in under a minute.
+
+The fix logic per principle can be:
+- **Automated**: The script applies the fix directly (e.g., deleting dead code, replacing a local helper with a shared import)
+- **Agent-assisted**: The script creates the branch with a description of what needs to change, and a coding agent completes the fix
+
+Start with automated fixes for simple principles (dead code removal, import replacement) and agent-assisted for complex ones (boundary validation refactoring).
+
+---
+
+## Step 5: Set up the recurring schedule
+
+### GitHub Actions workflow
+
+Create `.github/workflows/recurring-cleanup.yml`:
+
+```yaml
+name: Recurring Cleanup
+
+on:
+  schedule:
+    - cron: "0 4 * * *"  # Daily at 4am UTC
+  workflow_dispatch:
+
+jobs:
+  scan-and-grade:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Add language/runtime setup steps needed for this repository.
+
+      - name: Run scanner
+        run: scripts/cleanup/scan.sh > scan-report.json
+
+      - name: Update quality grade
+        run: scripts/cleanup/grade.sh
+
+      - name: Commit grade update
+        run: |
+          git config user.name "cleanup-bot"
+          git config user.email "cleanup-bot@noreply"
+          git add docs/generated/quality-grade.json
+          git diff --cached --quiet || git commit -m "chore: update quality grade"
+          git push
+
+  open-cleanup-prs:
+    needs: scan-and-grade
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Add language/runtime setup steps needed for this repository.
+
+      - name: Generate cleanup PRs
+        run: scripts/cleanup/fix.sh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+Customize the cron schedule for this project's cadence. Daily is a good default — frequent enough to catch drift early, not so frequent it creates noise.
+
+---
+
+## Step 6: Integrate with existing harness
+
+- The scanner should also run as part of `make lint` — violations with `severity: error` should fail the build
+- The quality grade should be checked in CI — if the grade drops below a configurable threshold, the build warns (or fails)
+- Add `make scan` and `make grade` targets to `Makefile.harness`:
+
+```makefile
+scan:
+	@./scripts/cleanup/scan.sh
+
+grade:
+	@./scripts/cleanup/grade.sh
+```
+
+---
+
+## Step 7: Verify
+
+1. Run `scripts/cleanup/scan.sh` and confirm it produces a valid violation report
+2. Run `scripts/cleanup/grade.sh` and confirm it produces a quality grade
+3. Intentionally introduce a violation and confirm the scanner catches it
+4. Run `scripts/cleanup/fix.sh` on a test branch and confirm it opens a well-formed PR
+5. Confirm `make lint` fails on `severity: error` violations
+
+---
+
+## Deliverables
+
+- [ ] `golden-principles.yaml` — machine-readable principle definitions
+- [ ] `scripts/cleanup/scan.sh` — scans for violations, outputs JSON report
+- [ ] `scripts/cleanup/grade.sh` — computes and writes quality grade
+- [ ] `scripts/cleanup/fix.sh` — generates focused cleanup PRs
+- [ ] `.github/workflows/recurring-cleanup.yml` — daily scheduled workflow
+- [ ] `make scan` and `make grade` targets in `Makefile.harness`
+- [ ] Scanner integrated into `make lint` for error-severity violations
+- [ ] Quality grade tracked in `docs/generated/quality-grade.json`
+
+## Key principle
+
+Technical debt is a high-interest loan. Pay it down continuously in small increments. Human taste is captured once in golden principles, then enforced continuously on every line of code. Catch bad patterns daily, not weekly.
