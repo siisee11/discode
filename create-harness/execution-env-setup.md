@@ -86,7 +86,58 @@ Expectations:
 - Startup should block until the app is actually ready, or fail clearly.
 - Add healthcheck logic rather than relying on blind sleeps.
 
-### C. Reproducibility and validation flow
+### C. Environment initialization script (`init.sh`)
+
+Create `scripts/harness/init.sh` — a single, idempotent script that prepares a clean, isolated environment for a coding agent to start working. This script is the foundation for the Ralph Loop's setup phase and can also be used standalone.
+
+**Usage:**
+
+```sh
+scripts/harness/init.sh [--base-branch <branch>] [--work-branch <name>]
+```
+
+**The script must perform the following steps in order:**
+
+1. **Create or reuse a git worktree**: If already inside a worktree, reuse it. Otherwise, create a new worktree using `git worktree add` from the specified base branch (default: `main`). Derive the worktree path using the same convention as `scripts/lib/worktree.sh`.
+
+2. **Clean git state**: Inside the worktree, ensure a clean working tree. Stash any uncommitted changes. Create and checkout the work branch if specified.
+
+3. **Install dependencies**: Run the project's package install command (detect `package.json` → `npm install`, `Cargo.toml` → `cargo build`, etc.). Fail clearly if install fails.
+
+4. **Verify build**: Run `make smoke` if `Makefile.harness` exists, otherwise attempt the project's default build command. If the build fails, exit non-zero with a diagnostic message.
+
+5. **Set up environment config**: If `.env.example` exists and `.env` does not, copy it. Set `DISCODE_WORKTREE_ID` and any other worktree-derived env vars.
+
+6. **Create runtime directories**: Ensure `.worktree/<worktree_id>/logs/`, `.worktree/<worktree_id>/tmp/`, and other runtime dirs exist.
+
+**Output contract:**
+
+The script must print a JSON object to stdout on success:
+
+```json
+{
+  "worktree_id": "<derived_id>",
+  "worktree_path": "<absolute_path_to_worktree>",
+  "work_branch": "<branch_name>",
+  "base_branch": "<base_branch>",
+  "deps_installed": true,
+  "build_verified": true,
+  "runtime_root": ".worktree/<worktree_id>/"
+}
+```
+
+**Requirements:**
+
+- Must be idempotent — running it twice on the same worktree is safe.
+- Must use `set -euo pipefail` (shell strict mode).
+- Must work from any directory (resolves repo root internally).
+- Must not require interactive input.
+- Exit code 0 on success, non-zero on any failure.
+- All output except the final JSON goes to stderr so the JSON can be parsed from stdout.
+
+**This script is reused by the Ralph Loop** (`ralph-loop.md`) as a deterministic replacement for the setup agent's environment preparation steps. The setup agent calls `init.sh` first, then only needs to create the execution plan.
+
+### D. Reproducibility and validation flow
 
 Implement an example flow or harness showing how Coding agent can use the system to:
 
@@ -105,6 +156,7 @@ Please produce all of the following:
 
 1. **Implementation**
    - Code changes for worktree-aware booting
+   - `scripts/harness/init.sh` — environment initialization script with JSON output contract
    - Install and configure the `agent-browser` skill
 
 2. **Design note**

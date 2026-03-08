@@ -44,6 +44,7 @@ This phase makes the app bootable per Git worktree for isolated development:
 - [ ] Single command to boot the app for the current worktree
 - [ ] Launch contract returning metadata (app URL, port, healthcheck status, worktree ID)
 - [ ] Healthcheck-based readiness (no blind sleeps)
+- [ ] `scripts/harness/init.sh` — idempotent environment initialization with JSON output contract
 - [ ] `agent-browser` skill installed for UI investigation
 - [ ] Example reproducibility and validation flow
 
@@ -103,11 +104,31 @@ This phase encodes golden principles and builds automated garbage collection for
 
 ---
 
-## Phase 6: Harness Engineering Audit
+## Phase 6: Ralph Loop (Autonomous Agent Loop)
+
+Apply the instructions in `ralph-loop.md`.
+
+This phase builds the automated coding agent loop that drives a task from prompt to pull request:
+
+- [ ] `scripts/ralph-loop/ralph-loop.mts` — main entry point with CLI parsing
+- [ ] `scripts/ralph-loop/lib/codex-client.mts` — Codex app-server stdio JSON-RPC client
+- [ ] `scripts/ralph-loop/lib/setup-agent.mts` — Phase 1: clean worktree, install deps, create execution plan
+- [ ] `scripts/ralph-loop/lib/coding-loop.mts` — Phase 2: iterative coding loop with `<promise>COMPLETE</promise>` detection
+- [ ] `scripts/ralph-loop/lib/pr-agent.mts` — Phase 3: read commits + plan, open pull request
+- [ ] `scripts/ralph-loop/lib/completion.mts` — completion signal detection utility
+- [ ] `scripts/ralph-loop/lib/worktree.mts` — parses worktree info from setup agent output, handles cleanup
+- [ ] `package.json` script entry for `ralph-loop`
+- [ ] `Makefile.harness` target for `ralph-loop`
+- [ ] Tests for codex-client, completion detection, and prompt construction
+- [ ] End-to-end verification: prompt → worktree → plan → coding iterations → commits → PR
+
+---
+
+## Phase 7: Harness Engineering Audit
 
 Apply the instructions in `implement-harness-audit.md`.
 
-This phase sets up deterministic build/test/lint workflows and the audit that verifies everything:
+This is the final phase — it verifies everything from all prior phases is wired together and passing:
 
 - [ ] `Makefile.harness` with smoke/test/lint/typecheck/check/ci targets
 - [ ] `Makefile` includes `Makefile.harness`
