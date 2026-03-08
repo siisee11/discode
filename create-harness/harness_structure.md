@@ -53,6 +53,11 @@ This is the direction I want:
 * Prefer many small, maintainable documents over one giant document.
 * Make it clear which document is canonical for each topic, who it is for, and when it should be updated.
 
+### Reference documents
+* When scaffolding `docs/references/`, copy the contents of `create-harness/references/` into `docs/references/`.
+* These are pre-curated LLM-friendly reference files (e.g., `codex-app-server-llm.txt`) that give agents context about external tools, frameworks, and patterns used by the project.
+* Add project-specific references over time as new dependencies or external integrations are introduced.
+
 ### Non-negotiable rules
 
 * NON_NEGOTIABLE_RULES.md contains absolute rules that block merge unconditionally. No exceptions, no workarounds.

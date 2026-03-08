@@ -20,7 +20,7 @@ This phase sets up the documentation hierarchy:
 - [ ] `docs/exec-plans/completed/`
 - [ ] `docs/exec-plans/tech-debt-tracker.md`
 - [ ] `docs/product-specs/index.md`
-- [ ] `docs/references/`
+- [ ] `docs/references/` — copy contents from `create-harness/references/` as seed
 - [ ] `docs/generated/`
 
 Key rules:
