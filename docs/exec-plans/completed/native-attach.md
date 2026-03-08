@@ -154,4 +154,4 @@ Native-first attach remains the default `pty-rust` behavior with OpenTUI fallbac
 - [docs/product-specs/runtime-attach-experience.md](../../product-specs/runtime-attach-experience.md)
 - [docs/NATIVE_ATTACH_IMPLEMENTATION_PLAN.md](../../NATIVE_ATTACH_IMPLEMENTATION_PLAN.md)
 - [docs/references/RUNTIME_NATIVE_CLIENT_CONTRACT.md](../../references/RUNTIME_NATIVE_CLIENT_CONTRACT.md)
-- [docs/exec-plans/active/README.md](./README.md)
+- [docs/exec-plans/completed/README.md](./README.md)
