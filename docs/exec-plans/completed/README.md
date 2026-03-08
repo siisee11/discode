@@ -10,7 +10,6 @@ Currently indexed completed plans and execution-heavy design notes:
 - [`harness-scaffolding.md`](harness-scaffolding.md)
 - [`../../../PTY_RUNTIME_IMPROVEMENT_STRATEGY.md`](../../../PTY_RUNTIME_IMPROVEMENT_STRATEGY.md)
 - [`../../references/DAEMON_RUST_MIGRATION.md`](../../references/DAEMON_RUST_MIGRATION.md)
-- [`../../NATIVE_ATTACH_IMPLEMENTATION_PLAN.md`](../../NATIVE_ATTACH_IMPLEMENTATION_PLAN.md)
 - [`../../references/pty/PTY_RUST_PHASE2_LATENCY.md`](../../references/pty/PTY_RUST_PHASE2_LATENCY.md)
 - [`../../references/pty/PTY_RUST_PHASE8_SLO_CANARY.md`](../../references/pty/PTY_RUST_PHASE8_SLO_CANARY.md)
 - [`../../DAEMON_RUST_PHASE7_SLO_CANARY.md`](../../DAEMON_RUST_PHASE7_SLO_CANARY.md)

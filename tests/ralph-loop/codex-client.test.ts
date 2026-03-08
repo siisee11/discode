@@ -25,7 +25,7 @@ describe('codex client', () => {
       model: 'gpt-5.3-codex',
       cwd: '/tmp/repo',
       approvalPolicy: 'never',
-      sandbox: 'workspaceWrite',
+      sandbox: 'workspace-write',
     });
 
     const written = child.stdin.read()?.toString() ?? await readOnce(child.stdin);

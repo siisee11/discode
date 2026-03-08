@@ -134,7 +134,7 @@ function parseArgs(args: string[]): CliOptions {
     workBranch: '',
     timeoutSeconds: 21600,
     approvalPolicy: 'never',
-    sandbox: 'workspaceWrite',
+    sandbox: 'workspace-write',
     preserveWorktree: false,
   };
 
@@ -192,14 +192,20 @@ function requireValue(args: string[], index: number, flag: string): string {
 }
 
 function resolveSandbox(mode: string, worktreePath: string): string | Record<string, unknown> {
-  if (mode === 'workspaceWrite') {
-    return {
-      type: 'workspaceWrite',
-      writableRoots: [worktreePath],
-      networkAccess: true,
-    };
+  void worktreePath;
+  switch (mode) {
+    case 'readOnly':
+    case 'read-only':
+      return 'read-only';
+    case 'workspaceWrite':
+    case 'workspace-write':
+      return 'workspace-write';
+    case 'dangerFullAccess':
+    case 'danger-full-access':
+      return 'danger-full-access';
+    default:
+      return mode;
   }
-  return mode;
 }
 
 function findRepoRoot(): string {

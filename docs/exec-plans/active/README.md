@@ -6,6 +6,7 @@ Update when: a plan starts, progresses, pauses, or is completed
 
 Current active plans:
 
+- [`native-attach.md`](native-attach.md) — Native attach migration plan for replacing the TypeScript/OpenTUI primary attach path in `pty-rust`
 - [`pty-rust-replacement.md`](pty-rust-replacement.md) — PTY Rust runtime and daemon migration plan with remaining rollout and compatibility work
 
 When adding a new active plan:

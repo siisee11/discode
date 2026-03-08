@@ -41,7 +41,7 @@ Options:
   --work-branch <name>     Name for the working branch (default: ralph/<slugified-prompt>)
   --timeout <seconds>      Max wall-clock time for entire run (default: 21600 = 6h)
   --approval-policy <p>    Codex approval policy (default: never)
-  --sandbox <policy>       Codex sandbox policy (default: workspaceWrite)
+  --sandbox <policy>       Codex sandbox policy (default: workspace-write)
 ```
 
 ---
@@ -244,6 +244,13 @@ The script communicates with Codex via the app-server stdio protocol. Reference 
 8. Repeat step 6-7 for each iteration
 ```
 
+Important wire-format note:
+
+- `thread/start` uses the simple `sandbox` enum string, not an object.
+- The accepted current values are `read-only`, `workspace-write`, and `danger-full-access`.
+- Do not send camelCase names like `workspaceWrite` on the wire.
+- The richer object form with `writableRoots` and `networkAccess` belongs to `turn/start` as `sandboxPolicy`, not to `thread/start`.
+
 ### Reading agent output
 
 To detect `<promise>COMPLETE</promise>`, collect text from `agentMessage` items:
@@ -254,15 +261,20 @@ To detect `<promise>COMPLETE</promise>`, collect text from `agentMessage` items:
 
 ### Sandbox policy
 
-Use `workspaceWrite` with the worktree path as the writable root:
+Use `workspace-write` with the worktree path as the writable root:
 
 ```json
 {
-  "type": "workspaceWrite",
+  "type": "workspace-write",
   "writableRoots": ["<worktree_path>"],
   "networkAccess": true
 }
 ```
+
+Compatibility note:
+
+- If the CLI accepts legacy aliases such as `readOnly`, `workspaceWrite`, or `dangerFullAccess`, normalize them before sending JSON-RPC requests.
+- On the wire, always emit the kebab-case variants accepted by app-server.
 
 ### Error handling
 
@@ -312,6 +324,9 @@ This is the core integration. It should:
 - Log all Codex events to a file under `.worktree/<worktree_id>/logs/ralph-loop.log`.
 - Print high-level status to stdout: phase transitions, iteration counts, commit hashes, completion signal, PR URL.
 - On failure, print the last N lines of the log for debugging.
+- Treat log writes as best-effort only; logging must never crash the loop runner.
+- Make client shutdown idempotent. The child process can still emit `stdout`, `stderr`, or `close` after shutdown begins.
+- Guard against `write after end` by ignoring late log writes once the stream is ending or closed.
 
 ### Integration with harness
 

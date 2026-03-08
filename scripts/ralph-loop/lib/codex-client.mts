@@ -68,6 +68,7 @@ export class CodexClient extends EventEmitter {
     }
   >();
   private readonly logStream?: WriteStream;
+  private isClosed = false;
   private requestId = 0;
 
   constructor(child: ChildProcessLike, logFile?: string) {
@@ -76,6 +77,9 @@ export class CodexClient extends EventEmitter {
     if (logFile) {
       mkdirSync(dirname(logFile), { recursive: true });
       this.logStream = createWriteStream(logFile, { flags: 'a' });
+      this.logStream.on('error', () => {
+        // Best-effort logging only. Logging failures must not crash the loop runner.
+      });
     }
 
     this.child.on('error', (error) => {
@@ -212,8 +216,12 @@ export class CodexClient extends EventEmitter {
   }
 
   close(): void {
-    this.logStream?.end();
+    if (this.isClosed) {
+      return;
+    }
+    this.isClosed = true;
     this.child.kill();
+    this.logStream?.end();
   }
 
   private bindReadable(stream: Readable, label: 'stdout' | 'stderr'): void {
@@ -267,13 +275,19 @@ export class CodexClient extends EventEmitter {
   }
 
   private writeJson(payload: Record<string, unknown>): void {
+    if (this.isClosed) {
+      return;
+    }
     const line = `${JSON.stringify(payload)}\n`;
     this.writeLog(`stdin: ${line.trimEnd()}`);
     this.child.stdin.write(line);
   }
 
   private writeLog(message: string): void {
-    this.logStream?.write(`${new Date().toISOString()} ${message}\n`);
+    if (!this.logStream || this.isClosed || this.logStream.writableEnded || this.logStream.destroyed) {
+      return;
+    }
+    this.logStream.write(`${new Date().toISOString()} ${message}\n`);
   }
 }
 
