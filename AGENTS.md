@@ -18,15 +18,14 @@ docs/
 │   ├── completed/
 │   └── tech-debt-tracker.md
 ├── generated/
-│   └── db-schema.md
+│   ├── db-schema.md
+│   └── ...
 ├── product-specs/
 │   ├── index.md
 │   ├── new-user-onboarding.md
 │   └── ...
 ├── references/
 │   ├── design-system-reference-llms.txt
-│   ├── nixpacks-llms.txt
-│   ├── uv-llms.txt
 │   └── ...
 ├── DESIGN.md
 ├── FRONTEND.md

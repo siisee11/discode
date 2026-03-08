@@ -75,6 +75,7 @@ This phase enforces architectural boundaries and taste mechanically via custom l
 - [ ] Dependency direction linter — verifies imports respect layer ordering
 - [ ] Boundary parsing linter — verifies external data is validated at boundaries
 - [ ] Taste invariant linters (structured logging, naming conventions, file size limits)
+- [ ] Linter implementation is modularized by concern; avoid one monolithic `shared` helper
 - [ ] All lint error messages include clear remediation instructions for agents
 - [ ] Structural tests for domain completeness and dependency graph validation
 - [ ] Cross-cutting boundary tests (shared concerns only via Providers interface)

@@ -54,6 +54,15 @@ Adapt the schema to match this project's actual architecture. The format should 
 
 Create custom lint rules that enforce the architectural invariants mechanically. Place them in `scripts/linters/` or an equivalent location.
 
+### Modularize linter implementation
+
+- Do not accumulate all linter logic in a single `shared` file.
+- Split the implementation by concern: rules loading, file discovery, import resolution, scan passes, and reporting should live in separate modules.
+- Keep any `shared` entrypoint as a thin compatibility barrel only when needed by existing callers.
+- When adding a new linter or scan type, put the logic in a focused module instead of extending a monolithic helper.
+
+This matters because custom linters tend to grow quickly. If all scanning logic lives in one file, agents will keep appending unrelated behavior until the linter itself becomes hard to change safely.
+
 ### Dependency direction linter
 
 - Parse imports/requires in each file
@@ -164,6 +173,7 @@ Intentionally introduce a violation (e.g., add a disallowed import) and confirm 
 - [ ] Dependency direction linter with remediation-quality error messages
 - [ ] Boundary parsing linter
 - [ ] Taste invariant linters (structured logging, naming, file size, etc.)
+- [ ] Linter implementation split into focused modules rather than one monolithic helper
 - [ ] Structural tests for domain completeness, dependency graph, cross-cutting boundaries
 - [ ] Integration into `make lint` and `make test`
 - [ ] All checks passing in `make ci`
