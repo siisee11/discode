@@ -518,6 +518,49 @@ describe('CLI flow safety (stage 1)', () => {
     }
   });
 
+  it('attach (pty-rust): auto mode falls back to tui when no native binary is discoverable', async () => {
+    const project = {
+      projectName: 'demo',
+      projectPath: '/work/demo',
+      tmuxSession: 'agent-bridge',
+      createdAt: new Date(),
+      lastActive: new Date(),
+      agents: { claude: true },
+      discordChannels: { claude: 'ch-1' },
+      instances: {
+        claude: { instanceId: 'claude', agentType: 'claude', tmuxWindow: 'demo-claude', channelId: 'ch-1' },
+      },
+    };
+    const oldNative = process.env.DISCODE_NATIVE_ATTACH;
+    const oldBin = process.env.DISCODE_RUNTIME_CLIENT_BIN;
+    vi.doMock('fs', async () => {
+      const actual = await vi.importActual<typeof import('fs')>('fs');
+      return {
+        ...actual,
+        existsSync: () => false,
+      };
+    });
+    const mod = await import('../bin/discode.ts');
+
+    try {
+      process.env.DISCODE_NATIVE_ATTACH = 'auto';
+      delete process.env.DISCODE_RUNTIME_CLIENT_BIN;
+      mocks.config.runtimeMode = 'pty-rust';
+      mocks.stateManager.getProject.mockReturnValue(project);
+
+      await mod.attachCommand('demo', { instance: 'claude' });
+
+      expect(mocks.spawnSync).not.toHaveBeenCalled();
+      expect(mocks.tuiCommand).toHaveBeenCalledOnce();
+    } finally {
+      vi.doUnmock('fs');
+      if (oldNative === undefined) delete process.env.DISCODE_NATIVE_ATTACH;
+      else process.env.DISCODE_NATIVE_ATTACH = oldNative;
+      if (oldBin === undefined) delete process.env.DISCODE_RUNTIME_CLIENT_BIN;
+      else process.env.DISCODE_RUNTIME_CLIENT_BIN = oldBin;
+    }
+  });
+
   it('attach (pty-rust): falls back to tui when native attach exits non-zero', async () => {
     const mod = await import('../bin/discode.ts');
     const project = {

@@ -34,7 +34,7 @@ Out of scope:
 3. [x] Runtime ordering hardening pass: fix event sequencing and lifecycle race edges needed for stable native client frame/patch apply under rapid input/resize churn (status: completed 2026-03-08).
 4. [x] Native client reliability pass: complete `runtime-client-rs` attach loop coverage (subscribe/render/input/resize/reconnect/resync) and error handling needed for daily use (status: completed 2026-03-08).
 5. [x] CLI routing and packaging pass: make `discode attach` prefer native attach in `pty-rust`, keep deterministic fallback, and verify artifact packaging/discovery (status: completed 2026-03-08).
-6. [ ] Validation and rollout readiness pass: land focused tests/docs updates and define default-switch gate criteria for native-first attach (status: not started).
+6. [x] Validation and rollout readiness pass: land focused tests/docs updates and define default-switch gate criteria for native-first attach (status: completed 2026-03-08).
 
 ## Current progress
 
@@ -88,6 +88,17 @@ Out of scope:
 - Verification for this milestone:
   - passed: `npx vitest run --configLoader runner tests/discode-cli.test.ts`
   - passed: `npm run typecheck`
+- Milestone 6 completed:
+  - added deterministic auto-mode fallback coverage in `tests/discode-cli.test.ts`:
+    - verifies `DISCODE_NATIVE_ATTACH=auto` skips native spawn when no runtime-client artifact is discoverable
+    - verifies attach falls back to OpenTUI in that scenario
+  - updated canonical product/spec quality docs for native-first attach:
+    - `docs/product-specs/runtime-attach-experience.md` now describes native-first `pty-rust` attach behavior and fallback policy
+    - `docs/QUALITY_SCORE.md` now tracks native attach readiness evidence and rollout gate source of truth
+  - finalized default-switch gate criteria for rollout-readiness tracking (below).
+- Verification for this milestone:
+  - passed: `npx vitest run --configLoader runner tests/discode-cli.test.ts`
+  - passed: `npm run typecheck`
 - Milestone 3 completed:
   - hardened daemon-rs runtime stream ordering to avoid sequence churn and lifecycle race edges under rapid resize/input:
     - unchanged periodic frames are now suppressed using frame-signature coalescing
@@ -118,14 +129,23 @@ Out of scope:
 - Ship client-side `patch-v2` sequencing guardrails now (base/seq validation + explicit resync) even while `frame-v2` remains the primary transport baseline.
 - Keep auto-mode native attach deterministic by requiring an actual discovered runtime-client artifact instead of implicit PATH lookup.
 - Prefer package-resolution discovery before cwd-relative guesses so global npm installs find native runtime-client binaries reliably.
+- Treat native-first attach as shipped behavior with explicit fallback rather than a hidden/experimental path.
+- Keep default-switch evaluation criteria explicit in this execution plan so release decisions are auditable.
+
+## Default-switch gate criteria
+
+Native-first attach remains the default `pty-rust` behavior with OpenTUI fallback. Keep this posture only while all gates stay green:
+
+1. `tests/discode-cli.test.ts` continues to pass for native success, deterministic auto fallback, and non-zero native exit fallback scenarios.
+2. `runtime-client-rs` and stream-server protocol tests remain green for handshake/patch ordering behavior (`cargo test --manifest-path runtime-client-rs/Cargo.toml`, `tests/runtime/protocol.test.ts`, `tests/runtime/stream-server.unit.test.ts`).
+3. No unresolved P0/P1 issues are open for attach regressions that block session entry (native attach failure without fallback, focus failure without attach recovery, or protocol incompatibility between daemon/client).
+4. Canonical docs remain aligned with shipped behavior (`docs/product-specs/runtime-attach-experience.md`, `docs/references/RUNTIME_NATIVE_CLIENT_CONTRACT.md`, this plan).
+5. Release artifacts include platform runtime-client binaries or retain fallback posture explicitly in release notes when artifacts are missing.
 
 ## Remaining issues / open questions
 
-- What exact CI/stress thresholds are required before flipping native attach to default for all `pty-rust` users?
-- Which failure classes should auto-fallback to OpenTUI versus hard-fail with remediation guidance?
-- What is the minimum feature parity bar before OpenTUI is no longer the documented primary path?
-- What is the timing for broadening platform support beyond initial macOS/Linux assumptions?
-- Milestone 6 should finalize rollout gates and canonical docs that still describe OpenTUI as primary attach behavior.
+- Broader platform packaging/validation expectations (beyond current macOS/Linux assumptions) still need an explicit roadmap.
+- Failure taxonomy for fallback vs hard-fail can be tightened further if runtime-client introduces new terminal capability requirements.
 
 ## Links to related documents
 
