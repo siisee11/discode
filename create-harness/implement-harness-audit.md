@@ -184,6 +184,7 @@ Fix any commands that fail due to missing tools or incorrect detection.
 |---|---|---|
 | 1 | `AGENTS.md` exists | file |
 | 2 | `ARCHITECTURE.md` exists | file |
+| 3 | `NON_NEGOTIABLE_RULES.md` exists | file |
 | 3 | `docs/PLANS.md` exists | file |
 | 4 | `docs/design-docs/index.md` exists | file |
 | 5 | `docs/exec-plans/tech-debt-tracker.md` exists | file |

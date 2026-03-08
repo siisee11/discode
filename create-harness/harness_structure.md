@@ -7,6 +7,7 @@ Please keep the following example structure exactly as-is in the prompt for refe
 ```
 AGENTS.md
 ARCHITECTURE.md
+NON_NEGOTIABLE_RULES.md
 docs/
 ├── design-docs/
 │   ├── index.md
@@ -51,6 +52,13 @@ This is the direction I want:
 * Organize documentation into focused, discoverable sections with strong indexing and cross-linking.
 * Prefer many small, maintainable documents over one giant document.
 * Make it clear which document is canonical for each topic, who it is for, and when it should be updated.
+
+### Non-negotiable rules
+
+* NON_NEGOTIABLE_RULES.md contains absolute rules that block merge unconditionally. No exceptions, no workarounds.
+* Use `create-harness/NON_NEGOTIABLE_RULES.md` as the template. Copy it to the repository root and adapt as needed.
+* AGENTS.md must link to NON_NEGOTIABLE_RULES.md so agents discover it immediately.
+* Rules are enforced mechanically in CI — they are not advisory.
 
 ### Architecture and product knowledge
 
