@@ -7,6 +7,7 @@ Update when: a design doc is added, replaced, or materially re-scoped
 | Document | Status | Verified against code | Canonical for | Update when |
 | --- | --- | --- | --- | --- |
 | [`core-beliefs.md`](core-beliefs.md) | active | 2026-03-07 | project principles and decision defaults | principles or product posture change |
+| [`worktree-harness.md`](worktree-harness.md) | active | 2026-03-08 | worktree boot contract, browser harness design, and observability integration | harness scripts, launch contract, or observability flow change |
 | [`../MODULE_BOUNDARIES.md`](../MODULE_BOUNDARIES.md) | active | 2026-03-07 | dependency direction and module ownership | package or import boundaries change |
 | [`../PTY_RUST_ARCHITECTURE_CONTRACT.md`](../PTY_RUST_ARCHITECTURE_CONTRACT.md) | active | 2026-03-07 | PTY Rust replacement architecture | sidecar architecture changes |
 | [`../PTY_RUST_QUERY_POLICY.md`](../PTY_RUST_QUERY_POLICY.md) | active | 2026-03-07 | supported PTY query semantics | terminal query behavior changes |

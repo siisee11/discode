@@ -1,4 +1,4 @@
-.PHONY: smoke test lint typecheck check ci
+.PHONY: smoke test lint typecheck check ci scan grade
 
 smoke:
 	@./scripts/harness/smoke.sh
@@ -15,3 +15,9 @@ typecheck:
 check: lint typecheck
 
 ci: smoke check test
+
+scan:
+	@./scripts/cleanup/scan.sh
+
+grade:
+	@./scripts/cleanup/grade.sh

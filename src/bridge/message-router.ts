@@ -220,24 +220,7 @@ export class BridgeMessageRouter {
     const defaultMs = agentType === 'opencode' ? 75 : 300;
     const delayMs = this.getEnvInt(envKey, defaultMs);
     await this.sleep(delayMs);
-    // Capture buffer state before Enter for debugging
-    if (this.deps.runtime.getWindowBuffer) {
-      try {
-        const buf = this.deps.runtime.getWindowBuffer(tmuxSession, windowName);
-        const lastLines = buf.split('\n').filter(l => l.trim()).slice(-8).join('\n');
-        console.log(`⌨️ [submit] buffer before Enter:\n${lastLines}`);
-      } catch { /* ignore */ }
-    }
     this.deps.runtime.sendEnterToWindow(tmuxSession, windowName, agentType);
-    // Capture buffer state after Enter
-    await this.sleep(500);
-    if (this.deps.runtime.getWindowBuffer) {
-      try {
-        const buf = this.deps.runtime.getWindowBuffer(tmuxSession, windowName);
-        const lastLines = buf.split('\n').filter(l => l.trim()).slice(-8).join('\n');
-        console.log(`⌨️ [submit] buffer after Enter:\n${lastLines}`);
-      } catch { /* ignore */ }
-    }
   }
 
   /**

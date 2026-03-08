@@ -199,7 +199,7 @@ describe('BridgeHookServer — auto-pending + streaming', () => {
     });
     expect(res.status).toBe(200);
     expect(mockPendingTracker.ensureStartMessage).toHaveBeenCalled();
-    expect(mockStreaming.start).toHaveBeenCalledWith('test', 'claude', 'ch-123', 'start-msg-ts');
+    expect(mockStreaming.start).toHaveBeenCalledWith('test', 'claude', 'ch-123', 'start-msg-ts', 'start-msg-ts');
     expect(mockStreaming.appendCumulative).toHaveBeenCalledWith('test', 'claude', '📖 Read(`src/index.ts`)');
   });
 
@@ -330,7 +330,7 @@ describe('BridgeHookServer — auto-pending + streaming', () => {
 
     expect(mockPendingTracker.ensurePending).toHaveBeenCalled();
     expect(mockPendingTracker.ensureStartMessage).toHaveBeenCalled();
-    expect(mockStreaming.start).toHaveBeenCalledWith('test', 'claude', 'ch-123', 'auto-start-msg');
+    expect(mockStreaming.start).toHaveBeenCalledWith('test', 'claude', 'ch-123', 'start-msg-ts', 'auto-start-msg');
     expect(mockStreaming.appendCumulative).toHaveBeenCalledWith('test', 'claude', '📖 Read(`src/index.ts`)');
   });
 
@@ -385,7 +385,7 @@ describe('BridgeHookServer — auto-pending + streaming', () => {
       text: 'Done!',
     });
 
-    expect(mockStreaming.start).toHaveBeenCalledWith('test', 'claude', 'ch-123', 'auto-start-msg');
+    expect(mockStreaming.start).toHaveBeenCalledWith('test', 'claude', 'ch-123', 'start-msg-ts', 'auto-start-msg');
     expect(mockStreaming.appendCumulative).toHaveBeenCalledTimes(2);
     expect(mockStreaming.appendCumulative).toHaveBeenCalledWith('test', 'claude', '📖 Read(`src/index.ts`)');
     expect(mockStreaming.appendCumulative).toHaveBeenCalledWith('test', 'claude', '✏️ Edit(`src/config.ts`)');

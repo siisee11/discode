@@ -1,0 +1,145 @@
+{
+  "version": 1,
+  "layers": [
+    { "name": "cli", "prefixes": ["bin/", "src/cli/"] },
+    { "name": "app", "prefixes": ["src/app/"] },
+    { "name": "bridge", "prefixes": ["src/bridge/"] },
+    { "name": "messaging", "prefixes": ["src/discord/", "src/slack/", "src/messaging/"] },
+    { "name": "runtime", "prefixes": ["src/runtime/", "src/tmux/", "src/capture/"] },
+    { "name": "agents", "prefixes": ["src/agents/", "src/claude/", "src/gemini/", "src/opencode/", "src/codex/", "src/sdk/"] },
+    { "name": "policy", "prefixes": ["src/policy/"] },
+    { "name": "state", "prefixes": ["src/state/", "src/config/", "src/types/"] },
+    { "name": "infra", "prefixes": ["src/infra/", "src/telemetry/"] },
+    { "name": "container", "prefixes": ["src/container/"] },
+    { "name": "worker", "prefixes": ["workers/telemetry-proxy/src/"] }
+  ],
+  "disallowed": [
+    {
+      "from": "app",
+      "to": "cli",
+      "rule": "Application orchestration must not depend on command parsing or terminal presentation.",
+      "remediation": "Move the shared logic into src/app, src/policy, src/state, or src/infra and call it from the CLI layer."
+    },
+    {
+      "from": "bridge",
+      "to": "cli",
+      "rule": "Bridge runtime code must not import CLI modules.",
+      "remediation": "Move user-facing formatting into src/cli or extract the shared logic into src/policy or src/infra."
+    },
+    {
+      "from": "bridge",
+      "to": "app",
+      "rule": "Bridge internals must not reach back into app orchestration.",
+      "remediation": "Push the orchestration decision upward into src/app or extract a shared helper into src/policy."
+    },
+    {
+      "from": "policy",
+      "to": "cli",
+      "rule": "Policy modules must remain reusable and side-effect free.",
+      "remediation": "Keep prompts, printing, and command parsing in src/cli and expose plain data helpers from src/policy."
+    },
+    {
+      "from": "policy",
+      "to": "app",
+      "rule": "Policy modules must not depend on app workflows.",
+      "remediation": "Pass the required data into the policy helper or move the use-case orchestration into src/app."
+    },
+    {
+      "from": "policy",
+      "to": "bridge",
+      "rule": "Policy modules cannot depend on bridge runtime state.",
+      "remediation": "Extract the pure rule into src/policy and keep hook/runtime side effects in src/bridge."
+    },
+    {
+      "from": "policy",
+      "to": "messaging",
+      "rule": "Policy modules cannot import messaging adapters directly.",
+      "remediation": "Pass messaging-specific values as arguments or keep adapter-specific behavior in src/discord or src/slack."
+    },
+    {
+      "from": "policy",
+      "to": "runtime",
+      "rule": "Policy modules cannot import runtime implementations directly.",
+      "remediation": "Keep tmux and PTY runtime behavior in src/runtime or src/tmux and expose only pure naming/launch helpers from src/policy."
+    },
+    {
+      "from": "policy",
+      "to": "container",
+      "rule": "Policy modules cannot import container orchestration code.",
+      "remediation": "Thread container-specific data into the policy function instead of importing container modules."
+    },
+    {
+      "from": "infra",
+      "to": "cli",
+      "rule": "Infrastructure utilities must not depend on command-layer presentation.",
+      "remediation": "Move shared low-level behavior into src/infra and keep chalk/output handling in src/cli."
+    },
+    {
+      "from": "infra",
+      "to": "app",
+      "rule": "Infrastructure helpers must stay below app orchestration.",
+      "remediation": "Invert the dependency: app code may call infra, but infra must not import app workflows."
+    },
+    {
+      "from": "infra",
+      "to": "bridge",
+      "rule": "Infrastructure helpers must not import bridge runtime concerns.",
+      "remediation": "Pass callbacks or plain values into infra utilities instead of importing src/bridge."
+    },
+    {
+      "from": "infra",
+      "to": "messaging",
+      "rule": "Infrastructure helpers must not depend on platform adapters.",
+      "remediation": "Keep Discord/Slack specifics in src/discord or src/slack and pass only primitive inputs into infra."
+    }
+  ],
+  "boundaryValidators": [
+    {
+      "file": "src/bridge/hook-server.ts",
+      "mustContainAll": ["parseJsonBody(", "checkAuth("],
+      "remediation": "Validate hook request shape in hook-server.ts before dispatching to runtime or event handlers."
+    },
+    {
+      "file": "src/bridge/hook-runtime-routes.ts",
+      "mustContainAny": ["typeof payload !== 'object'", "typeof payload !== \"object\""],
+      "remediation": "Guard runtime control payloads as unknown input at the route boundary before reading fields."
+    },
+    {
+      "file": "src/bridge/hook-event-pipeline.ts",
+      "mustContainAll": ["validateHookEventEnvelope(", "if (!validation.ok)"],
+      "remediation": "Parse hook events through validateHookEventEnvelope before routing them into bridge handlers."
+    },
+    {
+      "file": "workers/telemetry-proxy/src/index.ts",
+      "mustContainAll": ["sanitizeName(", "sanitizeParams("],
+      "remediation": "Sanitize external telemetry payloads at the worker boundary before forwarding to GA4."
+    }
+  ],
+  "requiredDirectories": [
+    "src/app",
+    "src/bridge",
+    "src/cli",
+    "src/config",
+    "src/infra",
+    "src/policy",
+    "src/runtime",
+    "src/state",
+    "src/types",
+    "docs/design-docs",
+    "docs/exec-plans/active",
+    "docs/exec-plans/completed",
+    "docs/generated",
+    "docs/product-specs",
+    "docs/references"
+  ],
+  "conventions": {
+    "maxSourceLines": 700,
+    "maxScriptLines": 400,
+    "shellStrictModeGlobs": [
+      "scripts/harness/*.sh",
+      "scripts/observability/*.sh",
+      "scripts/cleanup/*.sh"
+    ],
+    "forbidTodoOutsideTests": true
+  }
+}

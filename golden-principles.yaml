@@ -1,0 +1,31 @@
+principles:
+  - id: validate-boundaries
+    description: Boundary modules must validate unknown input before it reaches internal code.
+    severity: error
+    automerge: false
+    remediation: Add a dedicated parser or validation guard at the ingress point and reject malformed input before routing it inward.
+    detection_kind: boundary-lint
+  - id: no-inline-secrets
+    description: Source files and docs must not contain real credentials or token-shaped secret values.
+    severity: error
+    automerge: false
+    remediation: Move the value into environment or config and keep examples obviously fake.
+    detection_kind: secret-scan
+  - id: no-todo-outside-tests
+    description: Production code and docs must not accumulate untracked TODO placeholders.
+    severity: warn
+    automerge: true
+    remediation: Remove the placeholder or move the follow-up into docs/exec-plans/tech-debt-tracker.md with a concrete next step.
+    detection_kind: todo-scan
+  - id: shell-strict-mode
+    description: Harness shell scripts must run with strict mode enabled.
+    severity: warn
+    automerge: true
+    remediation: Add set -euo pipefail near the top of the script.
+    detection_kind: shell-strict
+  - id: keep-source-files-focused
+    description: Source and script files should stay small enough for an agent to understand quickly.
+    severity: warn
+    automerge: true
+    remediation: Split oversized files into focused helpers and keep only the composition root in the top-level module.
+    detection_kind: file-size

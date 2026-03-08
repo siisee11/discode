@@ -1,0 +1,58 @@
+data_dir = "/var/lib/vector"
+api.enabled = true
+api.address = "0.0.0.0:__VECTOR_API_PORT__"
+
+[sources.harness_logs]
+type = "http_server"
+address = "0.0.0.0:__VECTOR_LOG_PORT__"
+path = "/logs"
+strict_path = true
+  [sources.harness_logs.decoding]
+  codec = "json"
+
+[sources.otlp]
+type = "opentelemetry"
+use_otlp_decoding = true
+  [sources.otlp.grpc]
+  address = "0.0.0.0:__VECTOR_OTLP_GRPC_PORT__"
+  [sources.otlp.http]
+  address = "0.0.0.0:__VECTOR_OTLP_HTTP_PORT__"
+
+[sinks.vlogs_json]
+type = "http"
+inputs = ["harness_logs"]
+uri = "http://__VLOGS_CONTAINER__:9428/insert/jsonline?_stream_fields=app,worktree_id,level&_msg_field=event&_time_field=timestamp"
+method = "post"
+compression = "none"
+healthcheck.enabled = false
+  [sinks.vlogs_json.encoding]
+  codec = "json"
+  [sinks.vlogs_json.framing]
+  method = "newline_delimited"
+
+[sinks.vlogs_otel]
+type = "opentelemetry"
+inputs = ["otlp.logs"]
+  [sinks.vlogs_otel.protocol]
+  type = "http"
+  uri = "http://__VLOGS_CONTAINER__:9428/insert/opentelemetry/v1/logs"
+  [sinks.vlogs_otel.protocol.encoding]
+  codec = "otlp"
+
+[sinks.vmetrics]
+type = "opentelemetry"
+inputs = ["otlp.metrics"]
+  [sinks.vmetrics.protocol]
+  type = "http"
+  uri = "http://__VMETRICS_CONTAINER__:8428/opentelemetry/v1/metrics"
+  [sinks.vmetrics.protocol.encoding]
+  codec = "otlp"
+
+[sinks.vtraces]
+type = "opentelemetry"
+inputs = ["otlp.traces"]
+  [sinks.vtraces.protocol]
+  type = "http"
+  uri = "http://__VTRACES_CONTAINER__:10428/insert/opentelemetry/v1/traces"
+  [sinks.vtraces.protocol.encoding]
+  codec = "otlp"

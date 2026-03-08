@@ -1,0 +1,56 @@
+name: Recurring Cleanup
+
+on:
+  schedule:
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+
+jobs:
+  scan-and-grade:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Run scanner
+        run: ./scripts/cleanup/scan.sh > scan-report.json
+
+      - name: Update quality grade
+        run: ./scripts/cleanup/grade.sh
+
+      - name: Commit grade update
+        run: |
+          git config user.name "cleanup-bot"
+          git config user.email "cleanup-bot@noreply"
+          git add docs/generated/quality-grade.json
+          git diff --cached --quiet || git commit -m "chore: update quality grade"
+          git push
+
+  open-cleanup-prs:
+    needs: scan-and-grade
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Generate cleanup PRs
+        run: ./scripts/cleanup/fix.sh
+        env:
+          CLEANUP_APPLY: '1'
+          CLEANUP_OPEN_PRS: '1'
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

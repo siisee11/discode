@@ -16,6 +16,9 @@
     "pages:dev": "vite",
     "pages:build": "vite build",
     "pages:preview": "vite preview",
+    "harness:boot": "bash scripts/harness/boot.sh",
+    "harness:stop": "bash scripts/harness/stop-app.sh",
+    "harness:example": "bash scripts/harness/example-validation.sh",
     "pages:deploy": "vite build && wrangler pages deploy ./dist-site --project-name=discode-landing",
     "telemetry:deploy": "wrangler deploy --config workers/telemetry-proxy/wrangler.jsonc",
     "telemetry:secret": "wrangler secret put GA4_API_SECRET --config workers/telemetry-proxy/wrangler.jsonc",
@@ -86,6 +89,13 @@
     "yargs": "^18.0.0"
   },
   "devDependencies": {
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/exporter-metrics-otlp-http": "^0.213.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.213.0",
+    "@opentelemetry/resources": "^2.6.0",
+    "@opentelemetry/sdk-metrics": "^2.6.0",
+    "@opentelemetry/sdk-node": "^0.213.0",
+    "@opentelemetry/semantic-conventions": "^1.40.0",
     "@types/node": "^20.11.5",
     "@vitest/coverage-v8": "^4.0.18",
     "tsup": "^8.0.1",

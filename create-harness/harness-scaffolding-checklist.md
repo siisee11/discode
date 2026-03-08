@@ -26,6 +26,7 @@ Key rules:
 - Real source of truth lives in `docs/` and top-level documents, not in `AGENTS.md`.
 - Prefer many small, maintainable documents over one giant document.
 - Documentation must reflect real code and real operating practices.
+- **Every script must have a corresponding test.** When implementing a script in any phase, also write a test that verifies the script's behavior. Tests live in `tests/` mirroring the script path (e.g., `scripts/cleanup/scan.sh` → `tests/scripts/cleanup/scan.test.ts`).
 
 ---
 

@@ -4,7 +4,9 @@ Canonical for: work that is currently in progress and needs durable checkpoints
 Audience: contributors actively implementing multi-step changes
 Update when: a plan starts, progresses, pauses, or is completed
 
-Current status: no active checked-in execution plans as of 2026-03-07.
+Current active plans:
+
+- [`pty-rust-replacement.md`](pty-rust-replacement.md) — PTY Rust runtime and daemon migration plan with remaining rollout and compatibility work
 
 When adding a new active plan:
 

@@ -17,4 +17,5 @@ Reliability facts that should stay true:
 
 - daemon control and runtime APIs are treated as compatibility surfaces
 - daemon restarts matter after bridge/runtime/import-path changes
+- browser-harness boot uses health checks and deterministic worktree ports instead of blind sleeps
 - release operations must include web and package updates when applicable
