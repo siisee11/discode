@@ -1,8 +1,18 @@
 # Daemon Rust Phase 7 - SLOs and Canary Rollout Gates
 
+Canonical for: historical daemon rollout gate evidence
+Audience: contributors auditing migration history
+Status: historical rollout gate
+Update when: historical context needs correction
+
 Last updated: 2026-03-04
 
 This document defines Phase 7 operational gates for promoting the Rust daemon from opt-in to default.
+
+Historical note:
+
+- rollout controls in section 4 were removed after Phase 8 migration closure (`src/app/daemon-service.ts` now runs Rust daemon path directly)
+- do not treat section 4 controls as current production toggles
 
 ## 1) SLO Definitions
 

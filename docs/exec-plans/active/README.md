@@ -6,7 +6,7 @@ Update when: a plan starts, progresses, pauses, or is completed
 
 Current active plans:
 
-- [`pty-rust-replacement.md`](pty-rust-replacement.md) — PTY Rust runtime and daemon migration plan with remaining rollout and compatibility work
+- None currently. Add a new plan here when the next multi-step implementation begins.
 
 When adding a new active plan:
 

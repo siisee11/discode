@@ -10,6 +10,7 @@ Every release must include all of the following:
 2. Publish the npm release for the meta package `@siisee11/discode`.
 3. Publish the npm release for all platform packages `@siisee11/discode-*`.
 4. Create a GitHub Release with changelog text and uploaded release artifacts.
+5. Capture runtime/daemon readiness evidence from [`runtime-rollout-readiness.md`](runtime-rollout-readiness.md) and include any environment-specific rerun notes.
 
 Detailed npm packaging steps live in [`../references/release-npm.md`](../references/release-npm.md).
 

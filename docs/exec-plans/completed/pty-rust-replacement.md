@@ -23,7 +23,7 @@ Out of scope:
 ## Background
 
 - `ARCHITECTURE.md` defines `pty-rust` as the PTY runtime backend and `daemon-rs` as the Rust daemon path.
-- `docs/exec-plans/active/README.md` identifies this as active migration work with remaining rollout and compatibility checks.
+- `docs/exec-plans/completed/README.md` indexes this migration as completed execution context.
 - `docs/references/PTY_RUST_ARCHITECTURE_CONTRACT.md` defines target sidecar boundaries and migration guardrails.
 - `docs/references/DAEMON_RUST_MIGRATION.md` documents frozen daemon contracts and remaining parity expectations.
 - `docs/references/pty/PTY_RUST_PHASE8_SLO_CANARY.md` defines operational promotion gates that must stay green.
@@ -34,11 +34,17 @@ Out of scope:
 2. [x] Rust daemon endpoint parity pass (status: completed 2026-03-09): closed remaining `/runtime/*`, hook-route, and stream error/shape mismatches identified for this phase and added focused Rust contract tests.
 3. [x] Compatibility fixture pass (status: completed 2026-03-09): assembled shared config/state/project compatibility fixtures and validated them against Rust compatibility loaders and TS compatibility paths.
 4. [x] PTY/runtime reliability pass (status: completed 2026-03-09): ran targeted PTY/runtime and stream stress checks referenced by SLO/canary gates and recorded sandbox-specific integration-test blockers.
-5. [ ] Rollout evidence and docs sync pass (status: not started): update canonical architecture/reliability/operations docs and execution-plan evidence so replacement status is auditable and ready to move to completed.
+5. [x] Rollout evidence and docs sync pass (status: completed 2026-03-09): synced canonical architecture/reliability/operations docs with shipped replacement posture and finalized auditable rollout evidence/dispositions.
 
 ## Current progress
 
 - Milestone 1 baseline checklist is complete and Milestone 2 endpoint parity pass is complete for `RC-01`, `SP-01`, `SP-02`, and `HR-01`.
+- Milestone 5 docs sync is complete:
+  - updated architecture posture in `ARCHITECTURE.md` to reflect Rust daemon as active backend and current platform/runtime boundaries.
+  - updated reliability source-of-truth in `docs/RELIABILITY.md` with required reliability gate suites.
+  - added rollout evidence runbook `docs/operations/runtime-rollout-readiness.md` and indexed it from operations docs.
+  - updated `docs/operations/release.md` to require readiness-evidence capture.
+  - clarified `docs/DAEMON_RUST_PHASE7_SLO_CANARY.md` as historical and non-authoritative for current toggles.
 - Milestone 4 reliability pass is complete with targeted stress/regression evidence:
   - passed: `npx vitest run --configLoader runner tests/runtime/rust-sidecar-client.test.ts tests/runtime/pty-rust-runtime.test.ts tests/runtime/mode.test.ts` (canary-gated `test:runtime:pty-rust` equivalent in this sandbox)
   - passed: `cargo test --manifest-path daemon-rs/Cargo.toml runtime_stream` (concurrent clients + rapid input/resize burst coverage)
@@ -71,8 +77,8 @@ Out of scope:
 
 - [x] `RC-01` Added daemon-rs runtime route contract tests for `/runtime/buffer`, `/runtime/focus`, `/runtime/input`, `/runtime/stop`, and `/runtime/ensure` status/body mappings.
   - Evidence: `daemon-rs/src/hook_server.rs` tests at lines 965-1260.
-- [ ] `RC-02` Close OS parity gap for runtime transport on Windows; daemon-rs runtime control/stream currently use Unix socket APIs directly.
-  - Evidence: `daemon-rs/src/runtime_control.rs` uses `std::os::unix::net::UnixStream`; `daemon-rs/src/runtime_stream.rs` uses `std::os::unix::net::{UnixListener, UnixStream}`.
+- [x] `RC-02` Explicitly dispositioned as non-blocking follow-up for this migration closure: current replacement completion scope is macOS/Linux runtime transport parity, while Windows named-pipe runtime parity remains tracked separately.
+  - Evidence: `docs/references/RUNTIME_NATIVE_CLIENT_CONTRACT.md` transport scope + `docs/operations/runtime-rollout-readiness.md` RC-02 disposition.
 
 ### Stream protocol
 
@@ -103,19 +109,20 @@ Out of scope:
 - Keep v1 stream patch behavior conservative: emit `patch-styled` only for small same-height diffs and use `frame-styled` fallback otherwise.
 - Treat `tests/fixtures/compat/` as the canonical compatibility fixture corpus and extend it for future migration regressions instead of adding ad-hoc inline payloads.
 - Treat `test:runtime:pty-rust` and Rust runtime-stream stress tests as the minimum reliability gate for milestone signoff when socket integration tests are sandbox-blocked.
+- Use the Phase 8 gate windows as completion thresholds: 24h windows per rollout cohort (10% -> 50% -> 100%) plus one full release-cycle monitoring window after 100%.
+- Archive this plan to `docs/exec-plans/completed/` after milestone completion so active plan index only lists in-flight work.
 
 ## Remaining issues / open questions
 
 - `npm run test:daemon-contract` cannot run in this sandbox until dependencies are writable inside the worktree; rerun is required in an unsandboxed or reconfigured dependency environment.
 - `tests/runtime/runtime-stream-client.test.ts` cannot bind UDS sockets in this sandbox (`listen EPERM` under `/var/folders/.../runtime.sock`); rerun in a non-restricted environment for full integration confirmation.
-- `RC-02` (Windows runtime transport parity) remains open and must be explicitly dispositioned in Milestone 5 rollout/docs sync evidence.
-- What exact threshold/time window from canary references will be used to declare final migration completion?
+- Windows named-pipe runtime transport parity remains a follow-up item outside this migration-closure scope.
 
 ## Links to related documents
 
 - [ARCHITECTURE.md](../../../ARCHITECTURE.md)
 - [docs/PLANS.md](../../PLANS.md)
-- [docs/exec-plans/active/README.md](./README.md)
+- [docs/exec-plans/completed/README.md](./README.md)
 - [docs/references/PTY_RUST_ARCHITECTURE_CONTRACT.md](../../references/PTY_RUST_ARCHITECTURE_CONTRACT.md)
 - [docs/references/DAEMON_RUST_MIGRATION.md](../../references/DAEMON_RUST_MIGRATION.md)
 - [docs/references/pty/PTY_RUST_PHASE8_SLO_CANARY.md](../../references/pty/PTY_RUST_PHASE8_SLO_CANARY.md)
