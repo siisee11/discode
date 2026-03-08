@@ -18,12 +18,19 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: 'npm'
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install npm dependencies
+        run: npm ci
 
       - name: Run scanner
-        run: ./scripts/cleanup/scan.sh > scan-report.json
+        run: make scan > scan-report.json
 
       - name: Update quality grade
-        run: ./scripts/cleanup/grade.sh
+        run: make grade
 
       - name: Commit grade update
         run: |
@@ -47,9 +54,16 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: 'npm'
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install npm dependencies
+        run: npm ci
 
       - name: Generate cleanup PRs
-        run: ./scripts/cleanup/fix.sh
+        run: cargo build --release --manifest-path harness/Cargo.toml && ./harness/target/release/harnesscli cleanup fix
         env:
           CLEANUP_APPLY: '1'
           CLEANUP_OPEN_PRS: '1'

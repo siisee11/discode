@@ -503,7 +503,11 @@ fn collect_convention_files(repo_root: &Path) -> Result<Vec<PathBuf>, String> {
             .extension()
             .and_then(|value| value.to_str())
             .unwrap_or("");
-        owned && matches!(extension, "ts" | "tsx" | "js" | "mjs" | "cjs" | "sh" | "md")
+        owned
+            && matches!(
+                extension,
+                "ts" | "tsx" | "js" | "mjs" | "mts" | "cjs" | "sh" | "md"
+            )
     })
 }
 

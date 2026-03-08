@@ -1,5 +1,10 @@
 # PTY Rust Phase 8 - SLOs and Canary Rollout Gates
 
+Canonical for: PTY Rust rollout SLOs, promotion gates, rollback criteria, and canary monitoring policy
+Audience: contributors operating or auditing PTY Rust rollout safety
+Status: historical rollout gate
+Update when: rollout policy changes or a newer production policy supersedes this gate document
+
 Last updated: 2026-03-03
 
 This document defines Phase 8 operational gates for promoting `pty-rust` from canary to full rollout.

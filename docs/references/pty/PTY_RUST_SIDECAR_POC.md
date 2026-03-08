@@ -1,5 +1,10 @@
 # PTY Rust Sidecar PoC
 
+Canonical for: the original Phase 4 sidecar PoC shape kept as migration history
+Audience: contributors tracing how the PTY Rust runtime evolved from the early sidecar design
+Status: historical reference
+Update when: this document is superseded, archived elsewhere, or no longer provides useful migration context
+
 This document describes the Phase 4 PoC shape for `runtimeMode=pty-rust`.
 
 ## Components

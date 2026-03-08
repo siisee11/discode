@@ -27,8 +27,8 @@ Build a worktree-aware local harness for the browser-facing `site/` app, observa
 
 - Completed: repository audit against the checklist; existing docs/harness baseline verified.
 - Completed: phase 1 plan/check-in and phase 2 worktree-aware app boot around the Vite `site/` app.
-- Completed: phase 3 observability lifecycle, phase 4 invariant enforcement, phase 5 recurring cleanup automation, and phase 6 harness/CI tightening.
-- Verified: `cargo build --release --manifest-path harness/Cargo.toml`, `./harness/target/release/harnesscli audit .`, `make smoke`, `make lint`, `npm run typecheck`, and `npm test` all pass as of 2026-03-08.
+- Completed: phase 3 observability lifecycle, phase 4 invariant enforcement, phase 5 recurring cleanup automation, phase 6 Ralph loop scaffolding, and phase 7 harness/CI tightening.
+- Verified: `cargo build --release --manifest-path harness/Cargo.toml`, `cargo test --manifest-path harness/Cargo.toml`, `./harness/target/release/harnesscli audit .`, `make smoke`, `make lint`, `make typecheck`, `make test`, `make ci`, `make scan`, `make grade`, `DISCODE_WORKTREES_ROOT=/tmp/discode-worktrees scripts/harness/init.sh --base-branch main --work-branch harness-check`, and `npm test` pass as of 2026-03-08.
 
 ## Key Decisions
 
@@ -41,6 +41,7 @@ Build a worktree-aware local harness for the browser-facing `site/` app, observa
 - The observability stack remains optional and fails clearly when required binaries or containers are absent.
 - `agent-browser` was installed locally for harness/browser workflows.
 - The recurring cleanup fixer defaults to explicit, scoped actions instead of broad silent rewrites.
+- The Ralph loop now lives under `scripts/ralph-loop/` with tests for Codex JSON-RPC parsing, completion detection, and prompt construction.
 
 ## Related Links
 

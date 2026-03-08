@@ -25,5 +25,5 @@ This spec covers the user-visible lifecycle of a project-backed agent session.
 ## Canonical References
 
 - Architecture map: [`../../ARCHITECTURE.md`](../../ARCHITECTURE.md)
-- Runtime window contract: [`../RUNTIME_WINDOW_API.md`](../RUNTIME_WINDOW_API.md)
+- Runtime window contract: [`../references/RUNTIME_WINDOW_API.md`](../references/RUNTIME_WINDOW_API.md)
 - Daemon restart rules: [`../operations/daemon-restart.md`](../operations/daemon-restart.md)

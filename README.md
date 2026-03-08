@@ -4,7 +4,7 @@
   <img src="./discode.png" alt="Discode" width="220" />
 </p>
 
-[English](README.md) | [한국어](docs/README.ko.md)
+[English](README.md)
 
 Bridge AI agent CLIs to Discord for remote monitoring and control.
 
@@ -58,10 +58,10 @@ Discode runs your AI agent in tmux and simply relays output to Discord - no wrap
 - **Bun**: Version 1.3 or higher
 - **tmux**: Version 3.0 or higher
   - Basic tmux proficiency (session/window/pane navigation, attach/detach) is recommended
-- **Discord Bot**: Create a bot following the [Discord Bot Setup Guide](docs/DISCORD_SETUP.md)
+- **Discord Bot**: Create a bot following the [Discord Bot Setup Guide](docs/references/DISCORD_SETUP.md)
   - Required permissions: Send Messages, Manage Channels, Read Message History, Embed Links, Add Reactions
   - Required intents: Guilds, GuildMessages, MessageContent, GuildMessageReactions
-- **Slack (optional)**: Use Slack instead of Discord by following the [Slack Setup Guide](docs/SLACK_SETUP.md)
+- **Slack (optional)**: Use Slack instead of Discord by following the [Slack Setup Guide](docs/references/SLACK_SETUP.md)
 - **AI Agent**: At least one of:
   - [Claude Code](https://code.claude.com/docs/en/overview)
   - [Gemini CLI](https://github.com/google-gemini/gemini-cli)
@@ -520,5 +520,5 @@ MIT License - see [LICENSE](LICENSE) file for details.
 ## Support
 
 - Issues: [GitHub Issues](https://github.com/siisee11/discode/issues)
-- Discord Bot Setup: [Setup Guide](docs/DISCORD_SETUP.md)
-- Slack Setup: [Setup Guide](docs/SLACK_SETUP.md)
+- Discord Bot Setup: [Setup Guide](docs/references/DISCORD_SETUP.md)
+- Slack Setup: [Setup Guide](docs/references/SLACK_SETUP.md)

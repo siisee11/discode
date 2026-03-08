@@ -23,6 +23,6 @@ Help a new user get from install to a working remote-controlled agent session wi
 
 ## Canonical References
 
-- User-facing setup detail: [`../DISCORD_SETUP.md`](../DISCORD_SETUP.md), [`../SLACK_SETUP.md`](../SLACK_SETUP.md)
+- User-facing setup detail: [`../references/DISCORD_SETUP.md`](../references/DISCORD_SETUP.md), [`../references/SLACK_SETUP.md`](../references/SLACK_SETUP.md)
 - Architecture and entrypoints: [`../../ARCHITECTURE.md`](../../ARCHITECTURE.md)
 - Local development variants: [`../../DEVELOPMENT.md`](../../DEVELOPMENT.md)

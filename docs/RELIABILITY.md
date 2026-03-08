@@ -8,10 +8,10 @@ Start here for reliability topics:
 
 - Architecture and process model: [`../ARCHITECTURE.md`](../ARCHITECTURE.md)
 - Operational procedures: [`operations/index.md`](operations/index.md)
-- Runtime diagnostics: [`PTY_RUNTIME_DIAGNOSTICS.md`](PTY_RUNTIME_DIAGNOSTICS.md)
-- PTY Rust SLO gates: [`PTY_RUST_PHASE8_SLO_CANARY.md`](PTY_RUST_PHASE8_SLO_CANARY.md)
+- Runtime diagnostics: [`references/pty/PTY_RUNTIME_DIAGNOSTICS.md`](references/pty/PTY_RUNTIME_DIAGNOSTICS.md)
+- PTY Rust SLO gates: [`references/pty/PTY_RUST_PHASE8_SLO_CANARY.md`](references/pty/PTY_RUST_PHASE8_SLO_CANARY.md)
 - Rust daemon SLO gates: [`DAEMON_RUST_PHASE7_SLO_CANARY.md`](DAEMON_RUST_PHASE7_SLO_CANARY.md)
-- Runtime window contract: [`RUNTIME_WINDOW_API.md`](RUNTIME_WINDOW_API.md)
+- Runtime window contract: [`references/RUNTIME_WINDOW_API.md`](references/RUNTIME_WINDOW_API.md)
 
 Reliability facts that should stay true:
 

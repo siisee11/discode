@@ -1,0 +1,117 @@
+# Codex App Server
+
+Codex app-server is the interface Codex uses to power rich clients (for example, the Codex VS Code extension). Use it when you want a deep integration inside your own product: authentication, conversation history, approvals, and streamed agent events. The app-server implementation is open source in the Codex GitHub repository ([openai/codex/codex-rs/app-server](https://github.com/openai/codex/tree/main/codex-rs/app-server)). See the [Open Source](https://developers.openai.com/codex/open-source) page for the full list of open-source Codex components.
+
+If you are automating jobs or running Codex in CI, use the
+  <a href="/codex/sdk">Codex SDK</a> instead.
+
+## Protocol
+
+Like [MCP](https://modelcontextprotocol.io/), `codex app-server` supports bidirectional communication using JSON-RPC 2.0 messages (with the `"jsonrpc":"2.0"` header omitted on the wire).
+
+Supported transports:
+
+- `stdio` (`--listen stdio://`, default): newline-delimited JSON (JSONL).
+- `websocket` (`--listen ws://IP:PORT`, experimental): one JSON-RPC message per WebSocket text frame.
+
+In WebSocket mode, app-server uses bounded queues. When request ingress is full, the server rejects new requests with JSON-RPC error code `-32001` and message `"Server overloaded; retry later."` Clients should retry with an exponentially increasing delay and jitter.
+
+## Message schema
+
+Requests include `method`, `params`, and `id`:
+
+```json
+{ "method": "thread/start", "id": 10, "params": { "model": "gpt-5.1-codex" } }
+```
+
+Responses echo the `id` with either `result` or `error`:
+
+```json
+{ "id": 10, "result": { "thread": { "id": "thr_123" } } }
+```
+
+```json
+{ "id": 10, "error": { "code": 123, "message": "Something went wrong" } }
+```
+
+Notifications omit `id` and use only `method` and `params`:
+
+```json
+{ "method": "turn/started", "params": { "turn": { "id": "turn_456" } } }
+```
+
+You can generate a TypeScript schema or a JSON Schema bundle from the CLI. Each output is specific to the Codex version you ran, so the generated artifacts match that version exactly:
+
+```bash
+codex app-server generate-ts --out ./schemas
+codex app-server generate-json-schema --out ./schemas
+```
+
+## Getting started
+
+1. Start the server with `codex app-server` (default stdio transport) or `codex app-server --listen ws://127.0.0.1:4500` (experimental WebSocket transport).
+2. Connect a client over the selected transport, then send `initialize` followed by the `initialized` notification.
+3. Start a thread and a turn, then keep reading notifications from the active transport stream.
+
+Example (Node.js / TypeScript):
+
+```ts
+const proc = spawn("codex", ["app-server"], {
+  stdio: ["pipe", "pipe", "inherit"],
+});
+const rl = readline.createInterface({ input: proc.stdout });
+
+const send = (message: unknown) => {
+  proc.stdin.write(`${JSON.stringify(message)}\n`);
+};
+
+let threadId: string | null = null;
+
+rl.on("line", (line) => {
+  const msg = JSON.parse(line) as any;
+  console.log("server:", msg);
+
+  if (msg.id === 1 && msg.result?.thread?.id && !threadId) {
+    threadId = msg.result.thread.id;
+    send({
+      method: "turn/start",
+      id: 2,
+      params: {
+        threadId,
+        input: [{ type: "text", text: "Summarize this repo." }],
+      },
+    });
+  }
+});
+
+send({
+  method: "initialize",
+  id: 0,
+  params: {
+    clientInfo: {
+      name: "my_product",
+      title: "My Product",
+      version: "0.1.0",
+    },
+  },
+});
+send({ method: "initialized", params: {} });
+send({ method: "thread/start", id: 1, params: { model: "gpt-5.1-codex" } });
+```
+
+## Core primitives
+
+- **Thread**: A conversation between a user and the Codex agent. Threads contain turns.
+- **Turn**: A single user request and the agent work that follows. Turns contain items and stream incremental updates.
+- **Item**: A unit of input or output (user message, agent message, command runs, file change, tool call, and more).
+
+Use the thread APIs to create, list, or archive conversations. Drive a conversation with turn APIs and stream progress via turn notifications.
+
+## Lifecycle overview
+
+- **Initialize once per connection**: Immediately after opening a transport connection, send an `initialize` request with your client metadata, then emit `initialized`. The server rejects any request on that connection before this handshake.
+- **Start (or resume) a thread**: Call `thread/start` for a new conversation, `thread/resume` to continue an existing one, or `thread/fork` to branch history into a new thread id.
+- **Begin a turn**: Call `turn/start` with the target `threadId` and user input. Optional fields override model, personality, `cwd`, sandbox policy, and more.
+- **Steer an active turn**: Call `turn/steer` to append user input to the currently in-flight turn without creating a new turn.
+- **Stream events**: After `turn/start`, keep reading notifications on stdout: `thread/archived`, `thread/unarchived`, `item/started`, `item/completed`, `item/agentMessage/delta`, tool progress, and other updates.
+- **Finish the turn**: The server emits `turn/completed` with final status when the model finishes or after a `turn/interrupt` cancellation.

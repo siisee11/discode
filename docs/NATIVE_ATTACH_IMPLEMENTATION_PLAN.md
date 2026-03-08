@@ -36,7 +36,7 @@ Provide a native attach path where:
 
 Deliverables:
 
-- `docs/RUNTIME_NATIVE_CLIENT_CONTRACT.md` finalized.
+- `docs/references/RUNTIME_NATIVE_CLIENT_CONTRACT.md` finalized.
 - v2 message shapes, error semantics, reconnect model fixed.
 
 Exit criteria:

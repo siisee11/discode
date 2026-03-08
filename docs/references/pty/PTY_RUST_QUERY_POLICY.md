@@ -1,5 +1,10 @@
 # PTY Rust Query-Response Policy
 
+Canonical for: supported PTY query sequences and partial-sequence handling rules in the Rust sidecar path
+Audience: contributors changing terminal query behavior, VT parsing, or compatibility handling
+Status: active reference
+Update when: PTY query support, defaults, or carry semantics change
+
 This policy defines which terminal query sequences the Rust sidecar responds to in PTY mode and how partial sequences are handled.
 
 Implementation references:

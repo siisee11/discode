@@ -1,5 +1,10 @@
 # PTY Rust Phase 2 Tail-Latency Report
 
+Canonical for: the recorded Phase 2 latency gate comparing per-request sidecar RPC versus the persistent bridge path
+Audience: contributors validating PTY Rust migration performance gates
+Status: historical benchmark record
+Update when: the benchmark methodology changes or a newer benchmark supersedes this report
+
 This report closes Phase 2 exit criteria: request tail latency is improved versus the old request-per-process PoC path.
 
 ## Benchmark method

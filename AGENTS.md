@@ -8,6 +8,7 @@ Reference structure:
 ```text
 AGENTS.md
 ARCHITECTURE.md
+NON_NEGOTIABLE_RULES.md
 docs/
 ├── design-docs/
 │   ├── index.md
@@ -39,6 +40,7 @@ docs/
 ## Start Here
 
 - System map and entrypoints: [`ARCHITECTURE.md`](ARCHITECTURE.md)
+- Absolute merge blockers: [`NON_NEGOTIABLE_RULES.md`](NON_NEGOTIABLE_RULES.md)
 - Design rationale and decision records: [`docs/DESIGN.md`](docs/DESIGN.md)
 - Feature intent and product behavior: [`docs/PRODUCT_SENSE.md`](docs/PRODUCT_SENSE.md)
 - Execution plans and technical debt: [`docs/PLANS.md`](docs/PLANS.md)

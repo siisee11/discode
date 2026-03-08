@@ -32,11 +32,19 @@ This document explains the local harness that boots the Vite-served `site/` surf
 
 The command is idempotent for a live worktree instance: if the current worktree app is already healthy, it returns the existing metadata instead of starting a second copy.
 
+For fully automated agent runs, [`../../scripts/harness/init.sh`](../../scripts/harness/init.sh) creates or reuses an isolated Git worktree, stashes local dirt if needed, verifies `make smoke`, and returns JSON metadata for the selected worktree runtime root.
+
 ## Observability
 
 - `harnesscli observability start` starts a Docker-backed Vector + Victoria stack inside the current worktree runtime area.
 - `harnesscli boot` wires the app to that stack when `DISCODE_OBSERVABILITY=1`.
 - Logs are posted to Vector over HTTP, while traces and metrics are emitted from the harness dev server through OpenTelemetry OTLP/HTTP exporters.
+
+## Ralph Loop
+
+- [`../../scripts/ralph-loop/ralph-loop.mts`](../../scripts/ralph-loop/ralph-loop.mts) is the automated agent driver.
+- It relies on `scripts/harness/init.sh` for worktree preparation, uses Codex app-server over stdio JSON-RPC, and keeps the execution plan in `docs/exec-plans/active/` as the shared state across setup, coding, and PR phases.
+- The loop keeps one coding thread alive across iterations and only stops when the agent emits `<promise>COMPLETE</promise>`.
 
 ## Tradeoffs
 

@@ -11,7 +11,7 @@ Every release must include all of the following:
 3. Publish the npm release for all platform packages `@siisee11/discode-*`.
 4. Create a GitHub Release with changelog text and uploaded release artifacts.
 
-Detailed npm packaging steps currently live in the Korean guide [`../RELEASE_NPM.ko.md`](../RELEASE_NPM.ko.md).
+Detailed npm packaging steps live in [`../references/release-npm.md`](../references/release-npm.md).
 
 Related operational documents:
 

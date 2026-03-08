@@ -424,6 +424,7 @@ pub fn test(context: &HarnessContext) -> Result<i32, String> {
 
     run_steps(
         &[
+            Step::new("cargo", &["test", "--manifest-path", "harness/Cargo.toml"]),
             Step::new("npm", &["run", "test"]),
             Step::new(
                 "cargo",
@@ -543,15 +544,27 @@ pub fn audit(_context: &HarnessContext, target: &Path) -> Result<i32, String> {
     let required_files = [
         "AGENTS.md",
         "ARCHITECTURE.md",
+        "NON_NEGOTIABLE_RULES.md",
+        "golden-principles.yaml",
         "docs/PLANS.md",
         "docs/OBSERVABILITY.md",
         "docs/design-docs/index.md",
         "docs/exec-plans/tech-debt-tracker.md",
         "docs/product-specs/index.md",
+        "docs/references/codex-app-server-llm.txt",
         "Makefile.harness",
         "harness/Cargo.toml",
         "harness/src/main.rs",
+        "scripts/harness/init.sh",
+        "scripts/ralph-loop/ralph-loop.mts",
+        "scripts/ralph-loop/lib/codex-client.mts",
+        "scripts/ralph-loop/lib/setup-agent.mts",
+        "scripts/ralph-loop/lib/coding-loop.mts",
+        "scripts/ralph-loop/lib/pr-agent.mts",
+        "scripts/ralph-loop/lib/completion.mts",
+        "scripts/ralph-loop/lib/worktree.mts",
         ".github/workflows/harness.yml",
+        ".github/workflows/recurring-cleanup.yml",
     ];
     let required_dirs = [
         "docs/design-docs",
@@ -1023,6 +1036,106 @@ fn ensure_command(program: &str, args: &[&str], message: &str) -> Result<(), Str
     {
         Ok(_) => Ok(()),
         Err(_) => Err(message.to_string()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        audit, example, lint, smoke, stop, test as harness_test, typecheck, HarnessContext,
+    };
+    use std::fs;
+    use std::path::PathBuf;
+    use std::sync::{Mutex, OnceLock};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn env_lock() -> &'static Mutex<()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+    }
+
+    fn temp_dir(label: &str) -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("time went backwards")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!("discode-harness-{label}-{nanos}"));
+        fs::create_dir_all(&path).expect("create temp dir");
+        path
+    }
+
+    #[test]
+    fn smoke_uses_override_command() {
+        let _guard = env_lock().lock().expect("lock env");
+        let repo_root = temp_dir("smoke");
+        std::env::set_var("HARNESS_SMOKE_CMD", "exit 0");
+        let context = HarnessContext {
+            repo_root: repo_root.clone(),
+        };
+        assert_eq!(smoke(&context).expect("smoke should run"), 0);
+        std::env::remove_var("HARNESS_SMOKE_CMD");
+        let _ = fs::remove_dir_all(repo_root);
+    }
+
+    #[test]
+    fn test_uses_override_command() {
+        let _guard = env_lock().lock().expect("lock env");
+        let repo_root = temp_dir("test");
+        std::env::set_var("HARNESS_TEST_CMD", "exit 0");
+        let context = HarnessContext {
+            repo_root: repo_root.clone(),
+        };
+        assert_eq!(harness_test(&context).expect("test should run"), 0);
+        std::env::remove_var("HARNESS_TEST_CMD");
+        let _ = fs::remove_dir_all(repo_root);
+    }
+
+    #[test]
+    fn lint_uses_override_command() {
+        let _guard = env_lock().lock().expect("lock env");
+        let repo_root = temp_dir("lint");
+        std::env::set_var("HARNESS_LINT_CMD", "exit 0");
+        let context = HarnessContext {
+            repo_root: repo_root.clone(),
+        };
+        assert_eq!(lint(&context).expect("lint should run"), 0);
+        std::env::remove_var("HARNESS_LINT_CMD");
+        let _ = fs::remove_dir_all(repo_root);
+    }
+
+    #[test]
+    fn typecheck_uses_override_command() {
+        let _guard = env_lock().lock().expect("lock env");
+        let repo_root = temp_dir("typecheck");
+        std::env::set_var("HARNESS_TYPECHECK_CMD", "exit 0");
+        let context = HarnessContext {
+            repo_root: repo_root.clone(),
+        };
+        assert_eq!(typecheck(&context).expect("typecheck should run"), 0);
+        std::env::remove_var("HARNESS_TYPECHECK_CMD");
+        let _ = fs::remove_dir_all(repo_root);
+    }
+
+    #[test]
+    fn example_requires_boot_metadata() {
+        let repo_root = temp_dir("example");
+        let context = HarnessContext { repo_root };
+        let error = example(&context).expect_err("example should fail without metadata");
+        assert!(error.contains("No running harness app metadata found"));
+    }
+
+    #[test]
+    fn stop_is_noop_without_pid() {
+        let repo_root = temp_dir("stop");
+        let context = HarnessContext { repo_root };
+        context.ensure_runtime_dirs().expect("runtime dirs");
+        assert_eq!(stop(&context).expect("stop should succeed"), 0);
+    }
+
+    #[test]
+    fn audit_fails_when_required_files_are_missing() {
+        let root = temp_dir("audit");
+        assert_eq!(audit(&HarnessContext { repo_root: root.clone() }, &root).expect("audit"), 1);
     }
 }
 

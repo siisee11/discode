@@ -48,7 +48,7 @@ export function collectSourceFiles() {
   return walkFiles(repoRoot, (fullPath) => {
     const repoPath = toRepoPath(fullPath);
     return (
-      /\.(ts|tsx|js|mjs|cjs)$/.test(fullPath) &&
+      /\.(ts|tsx|js|mjs|mts|cjs)$/.test(fullPath) &&
       (repoPath.startsWith('src/') || repoPath.startsWith('bin/') || repoPath.startsWith('workers/telemetry-proxy/src/'))
     );
   });
@@ -66,7 +66,7 @@ export function collectConventionFiles() {
       repoPath.startsWith('workers/telemetry-proxy/src/') ||
       repoPath.startsWith('tests/');
 
-    return inOwnedSurface && /\.(ts|tsx|js|mjs|cjs|sh|md)$/.test(fullPath);
+    return inOwnedSurface && /\.(ts|tsx|js|mjs|mts|cjs|sh|md)$/.test(fullPath);
   });
 }
 

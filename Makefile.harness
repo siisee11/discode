@@ -1,4 +1,4 @@
-.PHONY: smoke test lint typecheck check ci scan grade audit
+.PHONY: smoke test lint typecheck check ci scan grade audit ralph-loop
 
 HARNESSCLI_BIN := ./harness/target/release/harnesscli
 
@@ -29,3 +29,6 @@ scan: $(HARNESSCLI_BIN)
 
 grade: $(HARNESSCLI_BIN)
 	@$(HARNESSCLI_BIN) cleanup grade
+
+ralph-loop:
+	@npx tsx scripts/ralph-loop/ralph-loop.mts $(ARGS)

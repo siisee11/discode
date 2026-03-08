@@ -13,8 +13,8 @@ Current security model:
 
 Primary references:
 
-- Discord setup: [`DISCORD_SETUP.md`](DISCORD_SETUP.md)
-- Slack setup: [`SLACK_SETUP.md`](SLACK_SETUP.md)
+- Discord setup: [`references/DISCORD_SETUP.md`](references/DISCORD_SETUP.md)
+- Slack setup: [`references/SLACK_SETUP.md`](references/SLACK_SETUP.md)
 - Release procedure: [`operations/release.md`](operations/release.md)
 - Runtime and hook contracts: [`references/index.md`](references/index.md)
 

@@ -1,7 +1,5 @@
 # Discord Bot Setup Guide
 
-한국어 버전: [DISCORD_SETUP.ko.md](DISCORD_SETUP.ko.md)
-
 Complete step-by-step guide to setting up your Discord bot for the Discode.
 
 ---
