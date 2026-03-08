@@ -67,6 +67,36 @@ This is the direction I want:
 
 * docs/design-docs/ should contain design rationale, core beliefs, and major decision documents, with a way to track status and verification state.
 
+### Core beliefs and agent-first operating principles
+
+* `docs/design-docs/core-beliefs.md` is a required document. It must be created during Phase 1 and linked from the design-docs index.
+* It should contain two sections:
+
+**Product Beliefs** — the product principles that shape design tradeoffs (e.g., local-first vs hosted, chat as control surface, persistent sessions). Adapt these to the specific product being built.
+
+**Agent-First Operating Principles** — the following principles must be encoded. They define how agents and humans interact with the repository:
+
+1. **Repository knowledge is the system of record.**
+   Anything that lives only in Slack, Google Docs, or someone's head is invisible to agents. If a decision matters, it must be encoded as a versioned artifact in this repository — code, markdown, schema, or executable plan.
+
+2. **What the agent cannot see does not exist.**
+   Context is bounded by what is discoverable in-repo at runtime. Push product intent, architectural rationale, and team conventions into docs/ so agents can reason about them directly.
+
+3. **Enforce boundaries centrally, allow autonomy locally.**
+   Architecture rules, dependency direction, and boundary validation are enforced mechanically via linters and CI. Within those guardrails, agents have freedom in how solutions are expressed.
+
+4. **Corrections are cheap, waiting is expensive.**
+   Agent throughput far exceeds human attention. Short-lived PRs with minimal blocking merge gates and fast follow-up fixes are preferred over long review queues.
+
+5. **Prefer boring technology.**
+   Composable, API-stable, well-represented-in-training-data dependencies are easier for agents to model. When an upstream library is opaque, it is often cheaper to reimplement the needed subset with full test coverage than to work around it.
+
+6. **Encode taste once, enforce continuously.**
+   Human judgment about quality, naming, structure, and reliability is captured in golden-principles.yaml, custom linters, and architectural rules — then applied mechanically to every line of code on every run.
+
+7. **Treat documentation as executable infrastructure.**
+   Docs are linted, cross-linked, freshness-checked, and graded. Stale or orphaned documentation is a defect, same as a failing test.
+
 ### Treat plans as first-class artifacts
 
 * Small tasks can use lightweight plans, but complex work should be tracked with checked-in execution plans.

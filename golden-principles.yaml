@@ -29,3 +29,45 @@ principles:
     automerge: true
     remediation: Split oversized files into focused helpers and keep only the composition root in the top-level module.
     detection_kind: file-size
+  - id: structured-logging-only
+    description: All log calls must use the structured logger from src/infra/logger; never use raw console.log, console.warn, or console.error in production code.
+    severity: error
+    automerge: false
+    remediation: Replace the raw console call with the structured logger (e.g. `logger.info({ context, detail }, "message")`) and import from src/infra/logger.
+    detection_kind: structured-logging
+  - id: consistent-schema-naming
+    description: Zod schemas must be named with a Schema suffix and inferred types with the corresponding unsuffixed name (e.g. FooSchema / Foo).
+    severity: warn
+    automerge: true
+    remediation: "Rename the schema to end with Schema and export the inferred type as: `export type Foo = z.infer<typeof FooSchema>`."
+    detection_kind: naming-convention
+  - id: prefer-shared-utilities
+    description: Common operations (concurrency helpers, retry logic, date formatting, path manipulation) must use the shared utility in src/infra rather than hand-rolled inline implementations.
+    severity: warn
+    automerge: false
+    remediation: Check src/infra for an existing helper. If none exists, add one there with tests rather than inlining a one-off implementation.
+    detection_kind: duplicate-utility
+  - id: parse-dont-probe
+    description: External and cross-boundary data must be parsed through a schema or validator, never accessed via unchecked property reads or type assertions.
+    severity: error
+    automerge: false
+    remediation: Define a Zod schema (or equivalent parser) for the data shape and call `.parse()` or `.safeParse()` at the boundary. Remove bare `as` casts on unknown input.
+    detection_kind: boundary-lint
+  - id: no-wildcard-re-exports
+    description: Modules must not use `export *` which obscures the public API and makes dependency tracing harder for agents.
+    severity: warn
+    automerge: true
+    remediation: Replace `export *` with explicit named exports so the module boundary is legible.
+    detection_kind: naming-convention
+  - id: test-coverage-for-new-code
+    description: New or modified modules must have corresponding test files; untested production code must not be merged.
+    severity: error
+    automerge: false
+    remediation: Add a test file at tests/<layer>/<module>.test.ts covering the new or changed behavior.
+    detection_kind: test-coverage
+  - id: single-responsibility-imports
+    description: A source file must not import from more than three architectural layers; excessive cross-layer coupling signals a design problem.
+    severity: warn
+    automerge: false
+    remediation: Extract a facade or intermediate module to reduce the number of layer dependencies in a single file.
+    detection_kind: architecture-lint

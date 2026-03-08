@@ -19,47 +19,118 @@ Explore the codebase and define principles in a machine-readable file (`golden-p
 - **severity**: `warn` or `error` — whether a violation blocks merge or just opens a cleanup PR
 - **automerge**: Whether cleanup PRs for this principle are safe to automerge
 
-Example principles to start with (adapt to this project):
+Start with the following baseline principles and adapt to this project. The list should grow over time as new patterns are identified.
+
+### Boundary and security principles (severity: error)
 
 ```yaml
 principles:
-  - id: prefer-shared-utils
+  - id: validate-boundaries
     description: >
-      Use shared utility packages over hand-rolled helpers.
-      Keeps invariants centralized and avoids duplicate logic.
-    detection: >
-      Find files that re-implement logic already available in shared utils.
-      Look for duplicate helper functions, hand-rolled parsers for known formats,
-      or utility functions defined locally instead of imported from shared packages.
+      Boundary modules must validate unknown input before it reaches internal code.
+      Never probe data shapes by guessing — parse, don't probe.
+    detection_kind: boundary-lint
     remediation: >
-      Replace the local implementation with an import from the shared utility package.
-      If no shared utility exists yet, extract the local helper into the shared package
-      and update all call sites.
+      Add a dedicated parser or validation guard at the ingress point and reject
+      malformed input before routing it inward.
+    severity: error
+    automerge: false
+
+  - id: parse-dont-probe
+    description: >
+      External and cross-boundary data must be parsed through a schema or validator,
+      never accessed via unchecked property reads or type assertions.
+    detection_kind: boundary-lint
+    remediation: >
+      Define a Zod schema (or equivalent parser) for the data shape and call
+      .parse() or .safeParse() at the boundary. Remove bare `as` casts on unknown input.
+    severity: error
+    automerge: false
+
+  - id: no-inline-secrets
+    description: >
+      Source files and docs must not contain real credentials or token-shaped secret values.
+    detection_kind: secret-scan
+    remediation: >
+      Move the value into environment or config and keep examples obviously fake.
+    severity: error
+    automerge: false
+
+  - id: structured-logging-only
+    description: >
+      All log calls must use the structured logger; never use raw console.log,
+      console.warn, or console.error in production code.
+    detection_kind: structured-logging
+    remediation: >
+      Replace the raw console call with the structured logger
+      (e.g. `logger.info({ context, detail }, "message")`) and import from
+      the project's logging module.
+    severity: error
+    automerge: false
+
+  - id: test-coverage-for-new-code
+    description: >
+      New or modified modules must have corresponding test files;
+      untested production code must not be merged.
+    detection_kind: test-coverage
+    remediation: >
+      Add a test file covering the new or changed behavior.
+    severity: error
+    automerge: false
+```
+
+### Code quality principles (severity: warn)
+
+```yaml
+  - id: prefer-shared-utilities
+    description: >
+      Common operations (concurrency helpers, retry logic, date formatting,
+      path manipulation) must use shared utilities rather than hand-rolled
+      inline implementations. Keeps invariants centralized.
+    detection_kind: duplicate-utility
+    remediation: >
+      Check the shared utility package for an existing helper. If none exists,
+      add one there with tests rather than inlining a one-off implementation.
+    severity: warn
+    automerge: false
+
+  - id: consistent-schema-naming
+    description: >
+      Zod schemas must be named with a Schema suffix and inferred types with
+      the corresponding unsuffixed name (e.g. FooSchema / Foo).
+    detection_kind: naming-convention
+    remediation: >
+      Rename the schema to end with Schema and export the inferred type as:
+      `export type Foo = z.infer<typeof FooSchema>`.
     severity: warn
     automerge: true
 
-  - id: validate-boundaries
+  - id: no-wildcard-re-exports
     description: >
-      Never probe data shapes by guessing. Validate at boundaries or rely on typed SDKs.
-      The agent must not build on assumed shapes.
-    detection: >
-      Find boundary code (API handlers, external integrations, webhook receivers)
-      that accesses fields without prior validation or type narrowing.
-      Look for raw property access on untyped inputs, missing schema validation,
-      or any-typed parameters being destructured without checks.
+      Modules must not use `export *` which obscures the public API and makes
+      dependency tracing harder for agents.
+    detection_kind: naming-convention
     remediation: >
-      Add schema validation at the boundary using the project's validation library.
-      Parse the input into a typed model before passing it to internal code.
-    severity: error
+      Replace `export *` with explicit named exports so the module boundary is legible.
+    severity: warn
+    automerge: true
+
+  - id: single-responsibility-imports
+    description: >
+      A source file must not import from more than three architectural layers;
+      excessive cross-layer coupling signals a design problem.
+    detection_kind: architecture-lint
+    remediation: >
+      Extract a facade or intermediate module to reduce the number of layer
+      dependencies in a single file.
+    severity: warn
     automerge: false
 
   - id: no-dead-code
     description: >
       Remove unused exports, unreachable branches, and stale feature flags.
       Dead code misleads agents into thinking it's still relevant.
-    detection: >
-      Find exports with no importers, functions with no call sites,
-      and feature flag checks for flags that are permanently on/off.
+    detection_kind: dead-code
     remediation: >
       Delete the dead code. If it was a public API, verify no external consumers exist first.
     severity: warn
@@ -69,29 +140,45 @@ principles:
     description: >
       All errors must be handled explicitly. No swallowed catches, no ignored rejections.
       Error paths must log structured context.
-    detection: >
-      Find empty catch blocks, catch blocks that only re-throw without context,
-      and unhandled promise rejections.
+    detection_kind: error-handling
     remediation: >
       Add structured error logging with relevant context. If the error is intentionally
       ignored, add an explicit comment explaining why.
     severity: warn
     automerge: true
 
-  - id: no-inline-secrets
+  - id: no-todo-outside-tests
     description: >
-      No hardcoded secrets, API keys, tokens, or credentials in source code.
-    detection: >
-      Scan for patterns matching API keys, tokens, passwords, and connection strings.
-      Check for high-entropy strings in non-test code.
+      Production code and docs must not accumulate untracked TODO placeholders.
+    detection_kind: todo-scan
     remediation: >
-      Move the value to environment variables or a secrets manager.
-      Reference it through the project's config layer.
-    severity: error
-    automerge: false
+      Remove the placeholder or move the follow-up into
+      docs/exec-plans/tech-debt-tracker.md with a concrete next step.
+    severity: warn
+    automerge: true
+
+  - id: shell-strict-mode
+    description: >
+      Harness shell scripts must run with strict mode enabled.
+    detection_kind: shell-strict
+    remediation: >
+      Add `set -euo pipefail` near the top of the script.
+    severity: warn
+    automerge: true
+
+  - id: keep-source-files-focused
+    description: >
+      Source and script files should stay small enough for an agent to
+      understand quickly.
+    detection_kind: file-size
+    remediation: >
+      Split oversized files into focused helpers and keep only the composition
+      root in the top-level module.
+    severity: warn
+    automerge: true
 ```
 
-Add principles specific to this project's conventions. The list should grow over time as new patterns are identified.
+Adapt the detection kinds to the project's language and tooling. Some detection kinds (like `boundary-lint`, `architecture-lint`, `todo-scan`, `shell-strict`, `file-size`) can be implemented as static scans. Others (like `structured-logging`, `naming-convention`, `duplicate-utility`, `test-coverage`, `dead-code`, `error-handling`) may require AST analysis or heuristic grep patterns.
 
 ---
 

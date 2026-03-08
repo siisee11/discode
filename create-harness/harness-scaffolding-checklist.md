@@ -15,6 +15,7 @@ This phase sets up the documentation hierarchy:
 - [ ] `NON_NEGOTIABLE_RULES.md` — absolute rules that block merge unconditionally (use `create-harness/NON_NEGOTIABLE_RULES.md` as template)
 - [ ] `docs/PLANS.md`
 - [ ] `docs/design-docs/index.md`
+- [ ] `docs/design-docs/core-beliefs.md` — product beliefs + agent-first operating principles (see `harness_structure.md`)
 - [ ] `docs/exec-plans/active/`
 - [ ] `docs/exec-plans/completed/`
 - [ ] `docs/exec-plans/tech-debt-tracker.md`
