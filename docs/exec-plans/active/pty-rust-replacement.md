@@ -33,12 +33,17 @@ Out of scope:
 1. [x] Contract and gap-baseline pass (status: completed 2026-03-09): produced an implementation checklist of unresolved parity items across runtime control, stream protocol, hook routes, and compatibility loading.
 2. [x] Rust daemon endpoint parity pass (status: completed 2026-03-09): closed remaining `/runtime/*`, hook-route, and stream error/shape mismatches identified for this phase and added focused Rust contract tests.
 3. [x] Compatibility fixture pass (status: completed 2026-03-09): assembled shared config/state/project compatibility fixtures and validated them against Rust compatibility loaders and TS compatibility paths.
-4. [ ] PTY/runtime reliability pass (status: not started): run and fix targeted PTY runtime and stream stress checks required by SLO/canary references.
+4. [x] PTY/runtime reliability pass (status: completed 2026-03-09): ran targeted PTY/runtime and stream stress checks referenced by SLO/canary gates and recorded sandbox-specific integration-test blockers.
 5. [ ] Rollout evidence and docs sync pass (status: not started): update canonical architecture/reliability/operations docs and execution-plan evidence so replacement status is auditable and ready to move to completed.
 
 ## Current progress
 
 - Milestone 1 baseline checklist is complete and Milestone 2 endpoint parity pass is complete for `RC-01`, `SP-01`, `SP-02`, and `HR-01`.
+- Milestone 4 reliability pass is complete with targeted stress/regression evidence:
+  - passed: `npx vitest run --configLoader runner tests/runtime/rust-sidecar-client.test.ts tests/runtime/pty-rust-runtime.test.ts tests/runtime/mode.test.ts` (canary-gated `test:runtime:pty-rust` equivalent in this sandbox)
+  - passed: `cargo test --manifest-path daemon-rs/Cargo.toml runtime_stream` (concurrent clients + rapid input/resize burst coverage)
+  - passed: `cargo test --manifest-path sidecar/pty-rust/Cargo.toml` (includes lifecycle/race and renderer budget stress tests)
+  - sandbox limitation observed: `tests/runtime/runtime-stream-client.test.ts` fails with UDS `listen EPERM` in this environment; this is an execution-environment restriction, not a product regression.
 - Milestone 3 fixture pass is complete:
   - added shared fixture corpus under `tests/fixtures/compat/`:
     - `state-legacy-maps.json`
@@ -97,11 +102,13 @@ Out of scope:
 - Execute Milestone 2 against `RC-01`, `SP-01`, `SP-02`, and `HR-01` in that order to minimize cross-surface regressions.
 - Keep v1 stream patch behavior conservative: emit `patch-styled` only for small same-height diffs and use `frame-styled` fallback otherwise.
 - Treat `tests/fixtures/compat/` as the canonical compatibility fixture corpus and extend it for future migration regressions instead of adding ad-hoc inline payloads.
+- Treat `test:runtime:pty-rust` and Rust runtime-stream stress tests as the minimum reliability gate for milestone signoff when socket integration tests are sandbox-blocked.
 
 ## Remaining issues / open questions
 
 - `npm run test:daemon-contract` cannot run in this sandbox until dependencies are writable inside the worktree; rerun is required in an unsandboxed or reconfigured dependency environment.
-- `RC-02` (Windows runtime transport parity) remains open and should be scoped with Milestone 4 reliability work unless pulled earlier.
+- `tests/runtime/runtime-stream-client.test.ts` cannot bind UDS sockets in this sandbox (`listen EPERM` under `/var/folders/.../runtime.sock`); rerun in a non-restricted environment for full integration confirmation.
+- `RC-02` (Windows runtime transport parity) remains open and must be explicitly dispositioned in Milestone 5 rollout/docs sync evidence.
 - What exact threshold/time window from canary references will be used to declare final migration completion?
 
 ## Links to related documents
