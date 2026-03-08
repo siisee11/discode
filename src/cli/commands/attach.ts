@@ -3,6 +3,7 @@ import { existsSync } from 'fs';
 import { homedir } from 'os';
 import { basename } from 'path';
 import { resolve, join } from 'path';
+import { createRequire } from 'module';
 import chalk from 'chalk';
 import { stateManager } from '../../state/index.js';
 import { config } from '../../config/index.js';
@@ -25,6 +26,7 @@ const RUNTIME_TRACE_PREFIX = '[runtime-focus]';
 const NATIVE_ATTACH_FLAG_ENV = 'DISCODE_NATIVE_ATTACH';
 const NATIVE_ATTACH_BIN_ENV = 'DISCODE_RUNTIME_CLIENT_BIN';
 type NativeAttachMode = 'off' | 'on' | 'auto';
+const requireForAttach = createRequire(import.meta.url);
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -152,18 +154,35 @@ function mapArchTag(arch: string): 'x64' | 'arm64' | null {
   return null;
 }
 
-function resolveNativeAttachBinary(): string {
+function resolveNativeAttachBinary(mode: NativeAttachMode): string | null {
   const explicit = process.env[NATIVE_ATTACH_BIN_ENV]?.trim();
   if (explicit) return explicit;
 
   const binaryName = process.platform === 'win32' ? 'discode-runtime-client.exe' : 'discode-runtime-client';
   const platformTag = mapPlatformTag(process.platform);
   const archTag = mapArchTag(process.arch);
+
+  // Prefer npm package resolution first so globally installed builds can
+  // discover runtime-client artifacts without relying on cwd-relative paths.
+  if (platformTag && archTag) {
+    try {
+      const pkg = `@siisee11/discode-runtime-client-${platformTag}-${archTag}`;
+      const packageJsonPath = requireForAttach.resolve(`${pkg}/package.json`);
+      const packageDir = resolve(packageJsonPath, '..');
+      const packageBinary = join(packageDir, 'bin', binaryName);
+      if (existsSync(packageBinary)) return packageBinary;
+    } catch {
+      // Continue to filesystem hints.
+    }
+  }
+
   const rawHints = [
     process.env.DISCODE_REPO,
     process.cwd(),
+    resolve(import.meta.dirname, '..'),
     resolve(import.meta.dirname, '..', '..'),
     resolve(import.meta.dirname, '..', '..', '..'),
+    resolve(import.meta.dirname, '..', '..', '..', '..'),
   ].filter((value): value is string => !!value && value.length > 0);
   const repoHints = [...new Set(rawHints.map((value) => resolve(value)))];
 
@@ -201,14 +220,20 @@ function resolveNativeAttachBinary(): string {
     if (existsSync(candidate)) return candidate;
   }
 
-  return 'discode-runtime-client';
+  // Explicitly enabled mode keeps PATH probing as a final fallback.
+  if (mode === 'on') {
+    return 'discode-runtime-client';
+  }
+  return null;
 }
 
 function tryNativeAttach(windowId: string, mode: NativeAttachMode, port: number): boolean {
   if (mode === 'off') return false;
 
+  const binary = resolveNativeAttachBinary(mode);
+  if (!binary) return false;
+
   const runtimeSocket = getDefaultRuntimeSocketPath();
-  const binary = resolveNativeAttachBinary();
   const result = spawnSync(
     binary,
     ['--socket', runtimeSocket, '--window-id', windowId, '--daemon-port', String(port)],

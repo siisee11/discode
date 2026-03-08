@@ -276,7 +276,8 @@ Runtime stream protocol behavior:
 - line-delimited JSON with protocol version stamping (`streamProtocolVersion = 1`)
 - supported inbound messages: `hello`, `subscribe`, `focus`, `input`, `resize`
 - supported outbound messages: `hello`, `focus`, `input`, `frame-styled`, `window-exit`, `error`
-- error codes implemented: `bad_json`, `bad_message`, `unsupported_protocol_version`, `bad_subscribe`, `bad_focus`, `bad_input`, `unknown_type`
+- error codes implemented: `bad_json`, `bad_message`, `unsupported_protocol_version`, `bad_subscribe`, `bad_focus`, `bad_input`, `bad_resize`, `unknown_type`
+- unchanged periodic frames are coalesced; `subscribe`/`focus`/successful `resize` force a fresh frame baseline emit
 
 Validation:
 

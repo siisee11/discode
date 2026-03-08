@@ -1,6 +1,6 @@
 # Runtime Native Client Contract
 
-Date: 2026-03-05
+Date: 2026-03-08
 Status: Draft (implementation target)
 
 ## 1) Purpose
@@ -38,8 +38,12 @@ Out of scope:
 
 - Existing protocol remains `v1`.
 - New native attach protocol is `v2`.
+- Handshake parsing and inbound message validation are canonicalized in `src/runtime/protocol.ts` (`parseRuntimeStreamProtocolVersion`, `isSupportedRuntimeStreamProtocolVersion`, and `validateRuntimeStreamInboundMessage`).
 - Server behavior:
   - Accept `hello.version=1` and `hello.version=2`.
+  - Accept integer `hello.version` as either number or numeric string.
+  - If `hello.version` is omitted, server defaults to protocol family `v1`.
+  - Reject malformed `hello.version` with `error.code="bad_message"`.
   - Respond in the same version family as the client request.
   - Reject unsupported versions with `error.code="unsupported_protocol_version"`.
 
@@ -73,9 +77,10 @@ Server reject:
 
 Behavior:
 
-- Required: `windowId`
-- Optional: `cols`, `rows` (initial viewport hint)
-- If window does not exist: `error.code="bad_subscribe"`
+- Required: canonical `windowId` (`<sessionName>:<windowName>`).
+- Optional: `cols`, `rows` (integer viewport hint).
+- Malformed payload: `error.code="bad_subscribe"`.
+- If runtime window does not exist, server emits `window-exit` with `signal="missing"` after subscribe.
 
 `focus`
 
@@ -86,7 +91,7 @@ Behavior:
 Behavior:
 
 - Sets active input target.
-- Missing/invalid window: `error.code="bad_focus"`.
+- Missing/invalid canonical `windowId`: `error.code="bad_focus"`.
 
 `input`
 
@@ -97,7 +102,7 @@ Behavior:
 Behavior:
 
 - Raw bytes forwarded to window PTY.
-- Missing fields or invalid base64: `error.code="bad_input"`.
+- Missing fields, invalid canonical `windowId`, or invalid strict base64: `error.code="bad_input"`.
 
 `resize`
 
@@ -108,7 +113,7 @@ Behavior:
 Behavior:
 
 - Resizes target window viewport.
-- Invalid size or window: `error.code="bad_resize"`.
+- Missing/invalid canonical `windowId` or non-positive/non-integer `cols`/`rows`: `error.code="bad_resize"`.
 
 `ping`
 
@@ -119,6 +124,7 @@ Behavior:
 Behavior:
 
 - Server replies with `pong` echo for liveness and RTT measurement.
+- `id` is optional; when present it must be a string.
 
 ## 8) Server -> Client Messages (v2)
 
@@ -180,6 +186,8 @@ Rules:
 
 - Client applies patch only when `baseSeq` matches local latest.
 - On mismatch, client requests resync by re-subscribing.
+- `patch-v2` is an optional optimization; servers may emit only `frame-v2` while still remaining protocol-compliant.
+- Native client reliability requirement: stale or malformed `patch-v2` (`baseSeq` mismatch, missing seq fields, or non-monotonic `seq`) must not mutate local frame state.
 
 `window-exit`
 
@@ -214,13 +222,13 @@ Operation-level:
 - `bad_focus`
 - `bad_input`
 - `bad_resize`
-- `window_not_found`
-- `runtime_unavailable`
 
 ## 10) Ordering and Reliability Rules
 
 - Event ordering is guaranteed per `windowId` by monotonic `seq`.
 - Different windows may interleave.
+- Servers may suppress unchanged periodic frame emissions to reduce sequence churn and transport noise.
+- `subscribe`, `focus`, and successful `resize` should force a fresh full-frame baseline emit even when rendered content is unchanged.
 - Client must treat stream disconnect as transient and retry.
 - Client must not assume input ack means screen update is already rendered.
 

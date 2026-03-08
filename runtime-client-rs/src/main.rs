@@ -89,7 +89,24 @@ fn run() -> Result<(), String> {
             match connection.rx.try_recv() {
                 Ok(event) => match event {
                     StreamEvent::Message(value) => {
-                        apply_stream_update(&mut frame, &value);
+                        match apply_stream_update(&mut frame, &value) {
+                            StreamApplyResult::Applied | StreamApplyResult::Ignored => {}
+                            StreamApplyResult::ResyncRequired(reason) => {
+                                let (cols, rows) =
+                                    terminal::size().unwrap_or((args.cols, args.rows));
+                                if let Err(error) = send_subscribe_and_focus(
+                                    &connection.writer,
+                                    &attached_window_id,
+                                    cols,
+                                    rows,
+                                ) {
+                                    status = format!("resync request failed: {error}");
+                                    reconnect_needed = true;
+                                } else {
+                                    status = format!("resync requested: {reason}");
+                                }
+                            }
+                        }
                         match value
                             .get("type")
                             .and_then(Value::as_str)
@@ -162,6 +179,7 @@ fn run() -> Result<(), String> {
                 &mut scroll,
                 &mut status,
             )?;
+            frame.last_seq = None;
             last_pong_received_at = Instant::now();
             last_ping_sent_at = Instant::now();
             continue;
@@ -226,6 +244,9 @@ fn run() -> Result<(), String> {
                     if let Some(next_status) =
                         handle_switch_key(&key, &args, &connection, &mut attached_window_id)
                     {
+                        if next_status.starts_with("switched window:") {
+                            frame.last_seq = None;
+                        }
                         status = next_status;
                         scroll.offset_from_bottom = 0;
                         render(&mut terminal.stdout, &frame, &scroll, &status)?;
@@ -284,6 +305,7 @@ fn run() -> Result<(), String> {
                 &mut scroll,
                 &mut status,
             )?;
+            frame.last_seq = None;
             last_pong_received_at = Instant::now();
             last_ping_sent_at = Instant::now();
         }
@@ -845,6 +867,7 @@ struct FrameState {
     cursor_row: Option<u16>,
     cursor_col: Option<u16>,
     cursor_visible: bool,
+    last_seq: Option<u64>,
 }
 
 #[cfg(unix)]
@@ -867,6 +890,7 @@ fn extract_frame_state(value: &Value) -> Option<FrameState> {
                 cursor_row: None,
                 cursor_col: None,
                 cursor_visible: true,
+                last_seq: parse_seq(value),
             })
         }
         "frame-v2" => {
@@ -885,6 +909,7 @@ fn extract_frame_state(value: &Value) -> Option<FrameState> {
                     .get("cursorVisible")
                     .and_then(Value::as_bool)
                     .unwrap_or(true),
+                last_seq: parse_seq(value),
             })
         }
         "frame-styled" => {
@@ -923,6 +948,7 @@ fn extract_frame_state(value: &Value) -> Option<FrameState> {
                             .and_then(Value::as_bool)
                     })
                     .unwrap_or(true),
+                last_seq: parse_seq(value),
             })
         }
         _ => None,
@@ -930,36 +956,62 @@ fn extract_frame_state(value: &Value) -> Option<FrameState> {
 }
 
 #[cfg(unix)]
-fn extract_patch_state(current: &FrameState, value: &Value) -> Option<FrameState> {
+enum StreamApplyResult {
+    Applied,
+    Ignored,
+    ResyncRequired(&'static str),
+}
+
+#[cfg(unix)]
+fn apply_stream_update(frame: &mut FrameState, value: &Value) -> StreamApplyResult {
+    if let Some(next) = extract_frame_state(value) {
+        *frame = next;
+        return StreamApplyResult::Applied;
+    }
     let message_type = value
         .get("type")
         .and_then(Value::as_str)
         .unwrap_or_default();
     match message_type {
-        "patch" | "patch-styled" => apply_index_patch(current, value),
-        "patch-v2" => apply_patch_v2(current, value),
-        _ => None,
+        "patch" | "patch-styled" => {
+            if let Some(next) = apply_index_patch(frame, value) {
+                *frame = next;
+                StreamApplyResult::Applied
+            } else {
+                StreamApplyResult::Ignored
+            }
+        }
+        "patch-v2" => match apply_patch_v2(frame, value) {
+            Some(next) => {
+                *frame = next;
+                StreamApplyResult::Applied
+            }
+            None => StreamApplyResult::ResyncRequired("patch seq mismatch"),
+        },
+        _ => StreamApplyResult::Ignored,
     }
 }
 
 #[cfg(unix)]
-fn apply_stream_update(frame: &mut FrameState, value: &Value) {
-    if let Some(next) = extract_frame_state(value) {
-        *frame = next;
-        return;
-    }
-    if let Some(next) = extract_patch_state(frame, value) {
-        *frame = next;
-    }
+fn parse_seq(value: &Value) -> Option<u64> {
+    value.get("seq").and_then(Value::as_u64)
 }
 
 #[cfg(unix)]
 fn apply_index_patch(current: &FrameState, value: &Value) -> Option<FrameState> {
+    let seq = parse_seq(value);
+    if let (Some(next_seq), Some(last_seq)) = (seq, current.last_seq) {
+        if next_seq <= last_seq {
+            return None;
+        }
+    }
+
     let mut next = FrameState {
         lines: current.lines.clone(),
         cursor_row: current.cursor_row,
         cursor_col: current.cursor_col,
         cursor_visible: current.cursor_visible,
+        last_seq: seq.or(current.last_seq),
     };
     let line_count = value
         .get("lineCount")
@@ -997,6 +1049,13 @@ fn apply_index_patch(current: &FrameState, value: &Value) -> Option<FrameState> 
 
 #[cfg(unix)]
 fn apply_patch_v2(current: &FrameState, value: &Value) -> Option<FrameState> {
+    let base_seq = value.get("baseSeq").and_then(Value::as_u64)?;
+    let next_seq = value.get("seq").and_then(Value::as_u64)?;
+    let current_seq = current.last_seq?;
+    if base_seq != current_seq || next_seq <= current_seq {
+        return None;
+    }
+
     let ops = value.get("ops").and_then(Value::as_array)?;
     let mut lines = current.lines.clone();
     for op in ops {
@@ -1032,6 +1091,7 @@ fn apply_patch_v2(current: &FrameState, value: &Value) -> Option<FrameState> {
         cursor_row: parse_cursor_row(value).or(current.cursor_row),
         cursor_col: parse_cursor_col(value).or(current.cursor_col),
         cursor_visible: parse_cursor_visible(value).unwrap_or(current.cursor_visible),
+        last_seq: Some(next_seq),
     })
 }
 
@@ -1290,7 +1350,7 @@ mod tests {
     use super::{
         apply_stream_update, build_visible_text_for_rows, compute_max_scroll_offset,
         compute_visible_range, is_copy_key, is_switch_key, key_event_to_bytes, parse_args,
-        reconnect_delay_ms, render_plain_lines, FrameState, ScrollState,
+        reconnect_delay_ms, render_plain_lines, FrameState, ScrollState, StreamApplyResult,
     };
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     use serde_json::json;
@@ -1352,6 +1412,7 @@ mod tests {
             cursor_row: None,
             cursor_col: None,
             cursor_visible: true,
+            last_seq: None,
         };
         let patch = json!({
             "type": "patch-styled",
@@ -1398,9 +1459,12 @@ mod tests {
             cursor_row: Some(0),
             cursor_col: Some(0),
             cursor_visible: true,
+            last_seq: Some(10),
         };
         let patch = json!({
             "type": "patch-v2",
+            "baseSeq": 10,
+            "seq": 11,
             "lineCount": 3,
             "ops": [
                 {
@@ -1425,6 +1489,38 @@ mod tests {
         assert_eq!(frame.cursor_row, Some(2));
         assert_eq!(frame.cursor_col, Some(4));
         assert!(!frame.cursor_visible);
+        assert_eq!(frame.last_seq, Some(11));
+    }
+
+    #[test]
+    fn requests_resync_for_patch_v2_base_seq_mismatch() {
+        let mut frame = FrameState {
+            lines: vec!["a".to_string(), "b".to_string()],
+            cursor_row: Some(0),
+            cursor_col: Some(0),
+            cursor_visible: true,
+            last_seq: Some(7),
+        };
+        let patch = json!({
+            "type": "patch-v2",
+            "baseSeq": 6,
+            "seq": 8,
+            "lineCount": 2,
+            "ops": [{
+                "kind": "replace",
+                "start": 1,
+                "deleteCount": 1,
+                "lines": [{ "segments": [{ "text": "B" }] }]
+            }]
+        });
+
+        let outcome = apply_stream_update(&mut frame, &patch);
+        assert!(matches!(
+            outcome,
+            StreamApplyResult::ResyncRequired("patch seq mismatch")
+        ));
+        assert_eq!(frame.lines, vec!["a".to_string(), "b".to_string()]);
+        assert_eq!(frame.last_seq, Some(7));
     }
 
     #[test]
@@ -1474,6 +1570,7 @@ mod tests {
             cursor_row: None,
             cursor_col: None,
             cursor_visible: false,
+            last_seq: None,
         };
         let scroll = ScrollState {
             offset_from_bottom: 1,

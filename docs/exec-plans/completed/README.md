@@ -6,6 +6,7 @@ Update when: an active plan completes or a legacy plan is indexed here
 
 Currently indexed completed plans and execution-heavy design notes:
 
+- [`native-attach.md`](native-attach.md)
 - [`harness-scaffolding.md`](harness-scaffolding.md)
 - [`../../../PTY_RUNTIME_IMPROVEMENT_STRATEGY.md`](../../../PTY_RUNTIME_IMPROVEMENT_STRATEGY.md)
 - [`../../references/DAEMON_RUST_MIGRATION.md`](../../references/DAEMON_RUST_MIGRATION.md)

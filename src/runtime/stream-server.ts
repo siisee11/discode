@@ -15,16 +15,10 @@ import { parseRuntimeWindowId } from './window-id.js';
 import {
   RUNTIME_STREAM_PROTOCOL_MAX_SUPPORTED_VERSION,
   RUNTIME_STREAM_PROTOCOL_MIN_SUPPORTED_VERSION,
+  isSupportedRuntimeStreamProtocolVersion,
+  type RuntimeStreamInbound,
+  validateRuntimeStreamInboundMessage,
 } from './protocol.js';
-
-function parseProtocolVersion(v: unknown): number | undefined {
-  if (typeof v === 'number' && Number.isFinite(v)) return v;
-  if (typeof v === 'string') {
-    const n = Number(v);
-    if (Number.isFinite(n)) return n;
-  }
-  return undefined;
-}
 
 type RuntimeStreamServerOptions = {
   tickMs?: number;
@@ -32,14 +26,6 @@ type RuntimeStreamServerOptions = {
   enablePatchDiff?: boolean;
   patchThresholdRatio?: number;
 };
-
-type RuntimeStreamInbound =
-  | { type: 'hello'; clientId?: string; version?: number | string }
-  | { type: 'subscribe'; windowId: string; cols?: number; rows?: number }
-  | { type: 'focus'; windowId: string }
-  | { type: 'input'; windowId: string; bytesBase64: string }
-  | { type: 'resize'; windowId: string; cols: number; rows: number }
-  | { type: 'ping'; id?: string };
 
 export class RuntimeStreamServer {
   private server?: Server;
@@ -145,22 +131,28 @@ export class RuntimeStreamServer {
   }
 
   private handleMessage(client: RuntimeStreamClientState, line: string): void {
-    let message: RuntimeStreamInbound;
+    let inbound: unknown;
     try {
-      message = JSON.parse(line) as RuntimeStreamInbound;
+      inbound = JSON.parse(line);
     } catch {
       this.send(client, { type: 'error', code: 'bad_json', message: 'Invalid JSON' });
       return;
     }
 
-    if (!message || typeof message !== 'object' || !('type' in message)) {
-      this.send(client, { type: 'error', code: 'bad_message', message: 'Invalid message' });
+    const validation = validateRuntimeStreamInboundMessage(inbound);
+    if (!validation.ok) {
+      this.send(client, {
+        type: 'error',
+        code: validation.code,
+        message: validation.message,
+      });
       return;
     }
+    const message: RuntimeStreamInbound = validation.message;
 
     switch (message.type) {
       case 'hello': {
-        const requestedVersion = parseProtocolVersion(message.version);
+        const requestedVersion = message.version;
         if (requestedVersion !== undefined && !this.isSupportedProtocolVersion(requestedVersion)) {
           this.send(client, {
             type: 'error',
@@ -180,10 +172,6 @@ export class RuntimeStreamServer {
         return;
       }
       case 'subscribe': {
-        if (!message.windowId || typeof message.windowId !== 'string') {
-          this.send(client, { type: 'error', code: 'bad_subscribe', message: 'Missing windowId' });
-          return;
-        }
         client.windowId = message.windowId;
         client.cols = clampNumber(message.cols, 30, 240, 120);
         client.rows = clampNumber(message.rows, 10, 120, 40);
@@ -195,10 +183,6 @@ export class RuntimeStreamServer {
         return;
       }
       case 'focus': {
-        if (!message.windowId || typeof message.windowId !== 'string') {
-          this.send(client, { type: 'error', code: 'bad_focus', message: 'Missing windowId' });
-          return;
-        }
         client.windowId = message.windowId;
         this.resetClientState(client);
         if (this.shouldUseAck(client)) {
@@ -239,16 +223,21 @@ export class RuntimeStreamServer {
         return;
       }
       case 'resize': {
-        if (!message.windowId || typeof message.windowId !== 'string') return;
         client.windowId = message.windowId;
         client.cols = clampNumber(message.cols, 30, 240, client.cols);
         client.rows = clampNumber(message.rows, 10, 120, client.rows);
         const parsed = parseRuntimeWindowId(message.windowId);
         if (parsed) {
+          if (!this.runtimeApi.exists(parsed)) {
+            this.sendWindowExit(client, message.windowId, 'missing');
+            return;
+          }
           try {
             this.runtimeApi.resize(parsed, client.cols, client.rows);
           } catch {
-            // best effort; client-side view still updates with requested size
+            this.sendWindowExit(client, message.windowId, 'not_running');
+            incRuntimeMetric('stream_runtime_error');
+            return;
           }
         }
         this.resetClientState(client);
@@ -327,10 +316,7 @@ export class RuntimeStreamServer {
   }
 
   private isSupportedProtocolVersion(version: number): boolean {
-    return (
-      version >= RUNTIME_STREAM_PROTOCOL_MIN_SUPPORTED_VERSION
-      && version <= RUNTIME_STREAM_PROTOCOL_MAX_SUPPORTED_VERSION
-    );
+    return isSupportedRuntimeStreamProtocolVersion(version);
   }
 
   private cleanupSocketPath(): void {
