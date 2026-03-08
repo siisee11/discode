@@ -306,14 +306,16 @@ impl HookServer {
             return HttpResponse::text(400, "Invalid project state");
         };
 
-        let command = build_runtime_ensure_command(
+        let Some(command) = build_runtime_ensure_command(
             project_name,
             project_path,
             agent_type,
             instance_id,
             permission_allow,
             self.auth_token.as_deref(),
-        );
+        ) else {
+            return HttpResponse::text(404, "Agent adapter not found");
+        };
 
         match self
             .with_runtime(|runtime| runtime.ensure_window(session_name, window_name, &command))
@@ -837,7 +839,7 @@ fn build_runtime_ensure_command(
     instance_id: &str,
     permission_allow: bool,
     hook_token: Option<&str>,
-) -> String {
+) -> Option<String> {
     let mut env_vars = vec![
         ("DISCODE_PROJECT".to_string(), project_name.to_string()),
         (
@@ -863,11 +865,11 @@ fn build_runtime_ensure_command(
         .collect::<Vec<_>>()
         .join("; ");
 
-    let start_command = build_agent_start_command(agent_type, project_path, permission_allow);
+    let start_command = build_agent_start_command(agent_type, project_path, permission_allow)?;
     if export_prefix.is_empty() {
-        start_command
+        Some(start_command)
     } else {
-        format!("{export_prefix}; {start_command}")
+        Some(format!("{export_prefix}; {start_command}"))
     }
 }
 
@@ -883,7 +885,7 @@ fn build_agent_start_command(
     agent_type: &str,
     project_path: &str,
     permission_allow: bool,
-) -> String {
+) -> Option<String> {
     let agent_command = match agent_type {
         "claude" => {
             let mut cmd = String::from("claude");
@@ -906,10 +908,14 @@ fn build_agent_start_command(
         }
         "gemini" => "gemini".to_string(),
         "opencode" => "opencode".to_string(),
-        other => other.to_string(),
+        _ => return None,
     };
 
-    format!("cd {} && {}", shell_escape(project_path), agent_command)
+    Some(format!(
+        "cd {} && {}",
+        shell_escape(project_path),
+        agent_command
+    ))
 }
 
 fn resolve_claude_plugin_dir() -> Option<String> {
@@ -1047,6 +1053,118 @@ mod tests {
     }
 
     #[test]
+    fn runtime_routes_validate_payloads_and_unavailable_mappings() {
+        let state_dir = temp_dir("discode-hook-runtime-routes");
+        write_state(
+            &state_dir,
+            json!({
+                "projects": {
+                    "demo": {
+                        "projectName": "demo",
+                        "projectPath": "/tmp/demo",
+                        "tmuxSession": "bridge",
+                        "instances": {
+                            "opencode": {
+                                "instanceId": "opencode",
+                                "agentType": "opencode",
+                                "tmuxWindow": "demo-opencode",
+                                "channelId": "ch-1"
+                            }
+                        }
+                    }
+                }
+            }),
+        );
+        let mut server = HookServer::new(state_dir, None);
+
+        let buffer_missing = server.handle_request(request("GET", "/runtime/buffer", "", None));
+        assert_eq!(buffer_missing.status, 400);
+        assert_eq!(buffer_missing.body, r#"{"error":"Missing windowId"}"#);
+
+        let buffer_unavailable = server.handle_request(request(
+            "GET",
+            "/runtime/buffer?windowId=bridge:demo",
+            "",
+            None,
+        ));
+        assert_eq!(buffer_unavailable.status, 501);
+        assert_eq!(
+            buffer_unavailable.body,
+            r#"{"error":"Runtime control unavailable"}"#
+        );
+
+        let focus_missing = server.handle_request(request("POST", "/runtime/focus", "{}", None));
+        assert_eq!(focus_missing.status, 400);
+        assert_eq!(focus_missing.body, "Missing windowId");
+
+        let focus_unavailable = server.handle_request(request(
+            "POST",
+            "/runtime/focus",
+            "{\"windowId\":\"bridge:demo\"}",
+            None,
+        ));
+        assert_eq!(focus_unavailable.status, 501);
+        assert_eq!(focus_unavailable.body, "Runtime control unavailable");
+
+        let input_invalid = server.handle_request(request("POST", "/runtime/input", "[]", None));
+        assert_eq!(input_invalid.status, 400);
+        assert_eq!(input_invalid.body, "Invalid payload");
+
+        let input_no_payload = server.handle_request(request(
+            "POST",
+            "/runtime/input",
+            "{\"submit\":false}",
+            None,
+        ));
+        assert_eq!(input_no_payload.status, 400);
+        assert_eq!(input_no_payload.body, "No input to send");
+
+        let input_unavailable = server.handle_request(request(
+            "POST",
+            "/runtime/input",
+            "{\"windowId\":\"bridge:demo\",\"text\":\"hello\"}",
+            None,
+        ));
+        assert_eq!(input_unavailable.status, 501);
+        assert_eq!(input_unavailable.body, "Runtime control unavailable");
+
+        let stop_missing = server.handle_request(request("POST", "/runtime/stop", "{}", None));
+        assert_eq!(stop_missing.status, 400);
+        assert_eq!(stop_missing.body, "Missing windowId");
+
+        let stop_unavailable = server.handle_request(request(
+            "POST",
+            "/runtime/stop",
+            "{\"windowId\":\"bridge:demo\"}",
+            None,
+        ));
+        assert_eq!(stop_unavailable.status, 501);
+        assert_eq!(stop_unavailable.body, "Runtime stop unavailable");
+
+        let ensure_missing = server.handle_request(request("POST", "/runtime/ensure", "{}", None));
+        assert_eq!(ensure_missing.status, 400);
+        assert_eq!(ensure_missing.body, "Missing projectName");
+
+        let ensure_project_missing = server.handle_request(request(
+            "POST",
+            "/runtime/ensure",
+            "{\"projectName\":\"missing\"}",
+            None,
+        ));
+        assert_eq!(ensure_project_missing.status, 404);
+        assert_eq!(ensure_project_missing.body, "Project not found");
+
+        let ensure_unavailable = server.handle_request(request(
+            "POST",
+            "/runtime/ensure",
+            "{\"projectName\":\"demo\",\"instanceId\":\"opencode\"}",
+            None,
+        ));
+        assert_eq!(ensure_unavailable.status, 501);
+        assert_eq!(ensure_unavailable.body, "Runtime control unavailable");
+    }
+
+    #[test]
     fn validates_opencode_event_payload_and_project_lookup() {
         let state_dir = temp_dir("discode-hook-server");
         write_state(
@@ -1167,6 +1285,41 @@ mod tests {
         ));
         assert_eq!(ok.status, 200);
         assert_eq!(ok.body, "OK");
+    }
+
+    #[test]
+    fn runtime_ensure_returns_adapter_not_found_for_unknown_agent() {
+        let state_dir = temp_dir("discode-hook-server");
+        write_state(
+            &state_dir,
+            json!({
+                "projects": {
+                    "demo": {
+                        "projectName": "demo",
+                        "projectPath": "/tmp/demo",
+                        "tmuxSession": "bridge",
+                        "instances": {
+                            "custom-agent": {
+                                "instanceId": "custom-agent",
+                                "agentType": "custom-agent",
+                                "tmuxWindow": "demo-custom",
+                                "channelId": "ch-1"
+                            }
+                        }
+                    }
+                }
+            }),
+        );
+
+        let mut server = HookServer::new(state_dir, None);
+        let response = server.handle_request(request(
+            "POST",
+            "/runtime/ensure",
+            "{\"projectName\":\"demo\",\"instanceId\":\"custom-agent\"}",
+            None,
+        ));
+        assert_eq!(response.status, 404);
+        assert_eq!(response.body, "Agent adapter not found");
     }
 
     #[test]
