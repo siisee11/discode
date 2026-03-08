@@ -17,7 +17,7 @@ Make the app bootable per Git worktree so Coding agent can launch and operate on
 
 Install the `agent-browser` skill for browser-level UI investigation:
 
-```bash
+```sh
 npx skills add vercel-labs/agent-browser --skill agent-browser
 ```
 

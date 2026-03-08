@@ -27,19 +27,24 @@ Create the following files. If a file already exists, preserve its content and m
 ### `Makefile.harness`
 
 ```makefile
-.PHONY: smoke test lint typecheck check ci
+HARNESS := harness/target/release/harnesscli
 
-smoke:
-	@./scripts/harness/smoke.sh
+.PHONY: smoke test lint typecheck check ci harness-build
 
-test:
-	@./scripts/harness/test.sh
+harness-build:
+	@cargo build --release --manifest-path harness/Cargo.toml
 
-lint:
-	@./scripts/harness/lint.sh
+smoke: harness-build
+	@$(HARNESS) smoke
 
-typecheck:
-	@./scripts/harness/typecheck.sh
+test: harness-build
+	@$(HARNESS) test
+
+lint: harness-build
+	@$(HARNESS) lint
+
+typecheck: harness-build
+	@$(HARNESS) typecheck
 
 check: lint typecheck
 
@@ -48,40 +53,66 @@ ci: smoke check test
 
 Also ensure the main `Makefile` includes it. If no `Makefile` exists, create one with `-include Makefile.harness`. If one exists, append `-include Makefile.harness` if not already present.
 
-### `scripts/harness/smoke.sh`
+### The `harnesscli` CLI
+
+All harness tooling lives in a single Rust binary called `harnesscli`, located in `harness/` at the repository root. Create `harness/Cargo.toml` as the crate manifest.
+
+Use `clap` (with derive macros) for subcommand routing and argument parsing, and `anyhow` for error handling. Organize the source into modules by command group:
+
+```
+harness/
+├── Cargo.toml
+└── src/
+    ├── main.rs          # CLI entrypoint, clap App definition
+    ├── cmd/
+    │   ├── mod.rs
+    │   ├── smoke.rs     # harnesscli smoke
+    │   ├── test.rs      # harnesscli test
+    │   ├── lint.rs      # harnesscli lint
+    │   ├── typecheck.rs # harnesscli typecheck
+    │   ├── audit.rs     # harnesscli audit
+    │   ├── cleanup.rs   # harnesscli cleanup {scan,grade,fix}
+    │   └── observability.rs  # harnesscli observability {start,stop,query}
+    └── util/
+        └── mod.rs       # shared helpers (worktree ID, process spawning, etc.)
+```
+
+Each command should support env var overrides via `std::env::var` and invoke external tools via `std::process::Command`.
+
+### `harnesscli smoke`
 
 The fastest possible sanity check — "does this project compile/build at all?" Should complete in seconds, not minutes. Use it to catch obvious breakage before running expensive checks.
 
-Implement the appropriate smoke command for this project's language and build tooling. Use `set -euo pipefail`. Support an optional `HARNESS_SMOKE_CMD` env var override — if set, run that command instead.
+Implement the appropriate smoke command for this project's language and build tooling. Support an optional `HARNESS_SMOKE_CMD` env var override — if set, run that command instead.
 
-### `scripts/harness/test.sh`
+### `harnesscli test`
 
 Runs the full test suite with no filters or exclusions. This is the comprehensive correctness check.
 
 Implement the appropriate test command for this project. Support an optional `HARNESS_TEST_CMD` env var override.
 
-### `scripts/harness/lint.sh`
+### `harnesscli lint`
 
 Runs static analysis and style checks. Should catch code quality issues, formatting problems, and common mistakes without executing code.
 
 Implement the appropriate linter for this project. Support an optional `HARNESS_LINT_CMD` env var override.
 
-### `scripts/harness/typecheck.sh`
+### `harnesscli typecheck`
 
 Runs type checking / compilation verification. Should catch type errors and interface mismatches.
 
 Implement the appropriate type checker for this project. Support an optional `HARNESS_TYPECHECK_CMD` env var override.
 
-### `scripts/audit_harness.sh`
+### `harnesscli audit`
 
-A bash script that audits the repo for harness compliance. It accepts an optional repo path argument (defaults to `.`). It performs two kinds of checks:
+Audits the repo for harness compliance. It accepts an optional repo path argument (defaults to `.`). Performs two kinds of checks:
 
 1. **File existence** — verify all required files exist (see audit checks reference table below)
 2. **Directory existence** — verify all required directories exist (see audit checks reference table below)
 
-For each check, print `[ok]` or `[missing]` with a descriptive label. At the end, if any checks failed, print the failure count and exit 1. If all pass, print "Harness audit passed." and exit 0.
+For each check, print `[ok]` or `[missing]` with a descriptive label. At the end, if any checks failed, print the failure count and exit with a non-zero status. If all pass, print "Harness audit passed." and exit 0.
 
-Use `set -euo pipefail`.
+Use `std::path::Path::exists()` for file/directory checks.
 
 ### `.github/workflows/harness.yml`
 
@@ -110,17 +141,17 @@ Customize the workflow by adding the correct setup action for the detected proje
 
 ---
 
-## Step 3: Make scripts executable
+## Step 3: Build the CLI
 
-```bash
-chmod +x scripts/audit_harness.sh scripts/harness/smoke.sh scripts/harness/test.sh scripts/harness/lint.sh scripts/harness/typecheck.sh
+```sh
+cargo build --release --manifest-path harness/Cargo.toml
 ```
 
 ---
 
 ## Step 4: Run the audit
 
-Run `scripts/audit_harness.sh .` and verify all checks pass. Fix any `[missing]` items until the output ends with:
+Run `harnesscli audit .` and verify all checks pass. Fix any `[missing]` items until the output ends with:
 
 ```
 Harness audit passed.
@@ -141,7 +172,7 @@ make test
 make ci
 ```
 
-Fix any scripts that fail due to missing tools or incorrect detection.
+Fix any commands that fail due to missing tools or incorrect detection.
 
 ---
 
@@ -158,12 +189,9 @@ Fix any scripts that fail due to missing tools or incorrect detection.
 | 5 | `docs/exec-plans/tech-debt-tracker.md` exists | file |
 | 6 | `docs/product-specs/index.md` exists | file |
 | 7 | `Makefile.harness` exists | file |
-| 8 | `scripts/audit_harness.sh` exists | file |
-| 9 | `scripts/harness/smoke.sh` exists | file |
-| 10 | `scripts/harness/test.sh` exists | file |
-| 11 | `scripts/harness/lint.sh` exists | file |
-| 12 | `scripts/harness/typecheck.sh` exists | file |
-| 13 | `.github/workflows/harness.yml` exists | file |
+| 8 | `harness/Cargo.toml` exists | file |
+| 9 | `harnesscli` CLI builds successfully | build |
+| 10 | `.github/workflows/harness.yml` exists | file |
 
 ### Directory existence
 

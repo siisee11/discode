@@ -52,7 +52,7 @@ Adapt the schema to match this project's actual architecture. The format should 
 
 ## Step 3: Build custom linters
 
-Create custom lint rules that enforce the architectural invariants mechanically. Place them in `scripts/linters/` or an equivalent location.
+Create custom lint rules that enforce the architectural invariants mechanically. Implement them as part of the `harnesscli lint` command, organized into separate modules under `harness/src/cmd/lint/` or `harness/src/linters/`.
 
 ### Modularize linter implementation
 
@@ -137,13 +137,13 @@ Structural tests verify the codebase's shape at test time. Place them alongside 
 
 Wire the custom linters and structural tests into the existing harness so they run automatically.
 
-### Add to `scripts/harness/lint.sh`
+### Add to `harnesscli lint`
 
-The custom linters should run as part of `make lint`. Either:
-- Add them as an additional step in the existing `lint.sh`
-- Or create `scripts/harness/lint-architecture.sh` and call it from `lint.sh`
+The custom linters should run as part of `make lint` (which calls `harnesscli lint`). Either:
+- Add them as an additional pass within the `harnesscli lint` command
+- Or add a `harnesscli lint --architecture` flag and call it from the main `harnesscli lint` flow
 
-### Add to `scripts/harness/test.sh`
+### Add to `harnesscli test`
 
 Structural tests should run as part of `make test`. They should be fast — they analyze file structure and imports, not runtime behavior.
 

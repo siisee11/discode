@@ -97,7 +97,7 @@ Add principles specific to this project's conventions. The list should grow over
 
 ## Step 2: Build the scanner
 
-Create `scripts/cleanup/scan.sh` (or equivalent) that:
+Implement the `harnesscli cleanup scan` subcommand that:
 
 1. Reads the golden principles file
 2. For each principle, runs the detection logic against the codebase
@@ -132,7 +132,7 @@ The scanner should be fast — it runs frequently. Prefer static analysis (grep,
 
 ## Step 3: Build the quality grader
 
-Create `scripts/cleanup/grade.sh` (or equivalent) that:
+Implement the `harnesscli cleanup grade` subcommand that:
 
 1. Runs the scanner
 2. Computes a quality grade for the codebase based on violation counts and severities
@@ -165,7 +165,7 @@ The grading formula should be configurable. Principles with `severity: error` sh
 
 ## Step 4: Build the cleanup PR generator
 
-Create `scripts/cleanup/fix.sh` (or equivalent) that:
+Implement the `harnesscli cleanup fix` subcommand that:
 
 1. Runs the scanner to find violations
 2. Groups violations by principle
@@ -178,8 +178,8 @@ Create `scripts/cleanup/fix.sh` (or equivalent) that:
 Each PR should be small and focused — one principle, one logical group of fixes. The goal is PRs reviewable in under a minute.
 
 The fix logic per principle can be:
-- **Automated**: The script applies the fix directly (e.g., deleting dead code, replacing a local helper with a shared import)
-- **Agent-assisted**: The script creates the branch with a description of what needs to change, and a coding agent completes the fix
+- **Automated**: The command applies the fix directly (e.g., deleting dead code, replacing a local helper with a shared import)
+- **Agent-assisted**: The command creates the branch with a description of what needs to change, and a coding agent completes the fix
 
 Start with automated fixes for simple principles (dead code removal, import replacement) and agent-assisted for complex ones (boundary validation refactoring).
 
@@ -208,11 +208,14 @@ jobs:
 
       # Add language/runtime setup steps needed for this repository.
 
+      - name: Build harness CLI
+        run: cargo build --release --manifest-path harness/Cargo.toml
+
       - name: Run scanner
-        run: scripts/cleanup/scan.sh > scan-report.json
+        run: harness/target/release/harnesscli cleanup scan > scan-report.json
 
       - name: Update quality grade
-        run: scripts/cleanup/grade.sh
+        run: harness/target/release/harnesscli cleanup grade
 
       - name: Commit grade update
         run: |
@@ -231,8 +234,11 @@ jobs:
 
       # Add language/runtime setup steps needed for this repository.
 
+      - name: Build harness CLI
+        run: cargo build --release --manifest-path harness/Cargo.toml
+
       - name: Generate cleanup PRs
-        run: scripts/cleanup/fix.sh
+        run: harness/target/release/harnesscli cleanup fix
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
@@ -248,21 +254,21 @@ Customize the cron schedule for this project's cadence. Daily is a good default 
 - Add `make scan` and `make grade` targets to `Makefile.harness`:
 
 ```makefile
-scan:
-	@./scripts/cleanup/scan.sh
+scan: harness-build
+	@$(HARNESS) cleanup scan
 
-grade:
-	@./scripts/cleanup/grade.sh
+grade: harness-build
+	@$(HARNESS) cleanup grade
 ```
 
 ---
 
 ## Step 7: Verify
 
-1. Run `scripts/cleanup/scan.sh` and confirm it produces a valid violation report
-2. Run `scripts/cleanup/grade.sh` and confirm it produces a quality grade
+1. Run `harnesscli cleanup scan` and confirm it produces a valid violation report
+2. Run `harnesscli cleanup grade` and confirm it produces a quality grade
 3. Intentionally introduce a violation and confirm the scanner catches it
-4. Run `scripts/cleanup/fix.sh` on a test branch and confirm it opens a well-formed PR
+4. Run `harnesscli cleanup fix` on a test branch and confirm it opens a well-formed PR
 5. Confirm `make lint` fails on `severity: error` violations
 
 ---
@@ -270,9 +276,9 @@ grade:
 ## Deliverables
 
 - [ ] `golden-principles.yaml` — machine-readable principle definitions
-- [ ] `scripts/cleanup/scan.sh` — scans for violations, outputs JSON report
-- [ ] `scripts/cleanup/grade.sh` — computes and writes quality grade
-- [ ] `scripts/cleanup/fix.sh` — generates focused cleanup PRs
+- [ ] `harnesscli cleanup scan` — scans for violations, outputs JSON report
+- [ ] `harnesscli cleanup grade` — computes and writes quality grade
+- [ ] `harnesscli cleanup fix` — generates focused cleanup PRs
 - [ ] `.github/workflows/recurring-cleanup.yml` — daily scheduled workflow
 - [ ] `make scan` and `make grade` targets in `Makefile.harness`
 - [ ] Scanner integrated into `make lint` for error-severity violations

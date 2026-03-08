@@ -26,7 +26,8 @@ Key rules:
 - Real source of truth lives in `docs/` and top-level documents, not in `AGENTS.md`.
 - Prefer many small, maintainable documents over one giant document.
 - Documentation must reflect real code and real operating practices.
-- **Every script must have a corresponding test.** When implementing a script in any phase, also write a test that verifies the script's behavior. Tests live in `tests/` mirroring the script path (e.g., `scripts/cleanup/scan.sh` → `tests/scripts/cleanup/scan.test.ts`).
+- **All harness tooling is a single Rust CLI** called `harnesscli`. Shell scripts are not allowed — implement all commands as subcommands of the `harnesscli` binary (e.g., `harnesscli smoke`, `harnesscli cleanup scan`, `harnesscli observability start`).
+- **Every command must have a corresponding test.** Tests live alongside the Rust source as `#[cfg(test)]` modules or in integration test files under `harness/tests/`.
 
 ---
 
@@ -58,9 +59,9 @@ This phase sets up ephemeral, per-worktree telemetry so the agent can query logs
 - [ ] Victoria Traces — trace storage with TraceQL API
 - [ ] All ports and data dirs derived from worktree ID
 - [ ] App instrumented with OpenTelemetry SDK (logs, metrics, traces to Vector)
-- [ ] `scripts/observability/start.sh` — starts the stack with health checks
-- [ ] `scripts/observability/stop.sh` — tears down the stack and cleans up
-- [ ] `scripts/observability/query.sh` — convenience wrapper for LogQL/PromQL/TraceQL queries
+- [ ] `harnesscli observability start` — starts the stack with health checks
+- [ ] `harnesscli observability stop` — tears down the stack and cleans up
+- [ ] `harnesscli observability query` — convenience wrapper for LogQL/PromQL/TraceQL queries
 - [ ] Integrated with worktree app boot flow
 
 ---
@@ -90,9 +91,9 @@ Apply the instructions in `recurring-cleanup.md`.
 This phase encodes golden principles and builds automated garbage collection for technical debt:
 
 - [ ] `golden-principles.yaml` — machine-readable principle definitions with detection and remediation
-- [ ] `scripts/cleanup/scan.sh` — scans for violations, outputs JSON report
-- [ ] `scripts/cleanup/grade.sh` — computes and tracks quality grade
-- [ ] `scripts/cleanup/fix.sh` — generates focused, small cleanup PRs
+- [ ] `harnesscli cleanup scan` — scans for violations, outputs JSON report
+- [ ] `harnesscli cleanup grade` — computes and tracks quality grade
+- [ ] `harnesscli cleanup fix` — generates focused, small cleanup PRs
 - [ ] `.github/workflows/recurring-cleanup.yml` — daily scheduled scan, grade update, and PR generation
 - [ ] `make scan` and `make grade` targets in `Makefile.harness`
 - [ ] Error-severity violations integrated into `make lint`
@@ -108,12 +109,13 @@ This phase sets up deterministic build/test/lint workflows and the audit that ve
 
 - [ ] `Makefile.harness` with smoke/test/lint/typecheck/check/ci targets
 - [ ] `Makefile` includes `Makefile.harness`
-- [ ] `scripts/harness/smoke.sh` — fast sanity check
-- [ ] `scripts/harness/test.sh` — full test suite
-- [ ] `scripts/harness/lint.sh` — static analysis
-- [ ] `scripts/harness/typecheck.sh` — type checking
-- [ ] `scripts/audit_harness.sh` — audits all files and directories exist
+- [ ] `harnesscli smoke` — fast sanity check
+- [ ] `harnesscli test` — full test suite
+- [ ] `harnesscli lint` — static analysis
+- [ ] `harnesscli typecheck` — type checking
+- [ ] `harnesscli audit` — audits all files and directories exist
+- [ ] `harness/Cargo.toml` — Rust crate for the `harnesscli` CLI
 - [ ] `.github/workflows/harness.yml` — CI workflow running `make ci`
-- [ ] All scripts are executable
-- [ ] `scripts/audit_harness.sh .` passes
+- [ ] `harnesscli` CLI builds successfully (`cargo build --release -p harness`)
+- [ ] `harness audit .` passes
 - [ ] `make ci` succeeds

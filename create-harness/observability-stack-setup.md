@@ -161,18 +161,20 @@ The app should read telemetry endpoints from environment variables so they can b
 - `OTEL_EXPORTER_OTLP_ENDPOINT` — Vector's OTLP receiver address
 - `LOG_ENDPOINT` — Vector's HTTP log receiver address (or equivalent)
 
-## Step 7: Create lifecycle scripts
+## Step 7: Create lifecycle commands
 
-### `scripts/observability/start.sh`
+All lifecycle tools are subcommands of the `harnesscli` CLI under `harnesscli observability`.
+
+### `harnesscli observability start`
 
 Starts the full observability stack for the current worktree:
 
 1. Derive worktree ID and compute ports for Vector, Victoria Logs, Victoria Metrics, Victoria Traces
 2. Create worktree-scoped data directories
-3. Start Victoria Logs, Victoria Metrics, Victoria Traces as background processes
+3. Start Victoria Logs, Victoria Metrics, Victoria Traces as background processes (via `std::process::Command`)
 4. Start Vector with the generated config
-5. Wait for all services to be healthy (HTTP readiness checks, not sleeps)
-6. Print a JSON metadata block with all endpoints:
+5. Wait for all services to be healthy (HTTP readiness checks using `reqwest` or `ureq`, not sleeps)
+6. Print a JSON metadata block with all endpoints (use `serde_json`):
 
 ```json
 {
@@ -190,37 +192,37 @@ Starts the full observability stack for the current worktree:
 
 Port numbers above are examples — use worktree-derived values.
 
-Use `set -euo pipefail`. Support env var overrides for all ports.
+Support env var overrides for all ports via `std::env::var`.
 
-### `scripts/observability/stop.sh`
+### `harnesscli observability stop`
 
 Stops the observability stack for the current worktree:
 
 1. Derive the same worktree ID
 2. Stop Vector, Victoria Logs, Victoria Metrics, Victoria Traces (use PID files or process matching)
-3. Optionally clean up data directories
+3. Optionally clean up data directories (use `--clean` flag)
 
-### `scripts/observability/query.sh`
+### `harnesscli observability query`
 
 A convenience wrapper for the agent to query any of the three APIs:
 
-```bash
-scripts/observability/query.sh logs '{app="myservice"} |= "error"'
-scripts/observability/query.sh metrics 'rate(http_requests_total[1m])'
-scripts/observability/query.sh traces '{duration > 2s}'
+```sh
+harnesscli observability query logs '{app="myservice"} |= "error"'
+harnesscli observability query metrics 'rate(http_requests_total[1m])'
+harnesscli observability query traces '{duration > 2s}'
 ```
 
-Should auto-detect the correct port for the current worktree and format the output as JSON.
+Should auto-detect the correct port for the current worktree and format the output as JSON. Use `reqwest` or `ureq` for HTTP requests and `serde_json` for output formatting.
 
 ## Step 8: Integrate with app boot flow
 
 If the worktree-aware app boot flow from `execution-env-setup.md` exists:
 
-- `scripts/observability/start.sh` should be called as part of the app startup sequence
-- `scripts/observability/stop.sh` should be called during teardown
+- `harnesscli observability start` should be called as part of the app startup sequence
+- `harnesscli observability stop` should be called during teardown
 - The app's environment variables for telemetry endpoints should be set automatically based on the observability stack's metadata output
 
-If no boot flow exists yet, the observability scripts should work standalone.
+If no boot flow exists yet, the observability commands should work standalone.
 
 ## Agent feedback loop
 
@@ -237,7 +239,7 @@ Once the stack is running, the coding agent operates in a feedback loop:
 ## Deliverables
 
 1. **Vector config template** — `scripts/observability/vector.toml`
-2. **Lifecycle scripts** — `scripts/observability/start.sh`, `stop.sh`, `query.sh`
+2. **Lifecycle commands** — `harnesscli observability start`, `harnesscli observability stop`, `harnesscli observability query`
 3. **App instrumentation** — OpenTelemetry SDK setup for the project's language, emitting logs/metrics/traces to Vector
 4. **Integration with worktree boot** — observability stack starts/stops with the app
 
@@ -253,5 +255,5 @@ Once the stack is running, the coding agent operates in a feedback loop:
 - Fully ephemeral — no state leaks between worktrees
 - Deterministic startup with health checks
 - All ports derived from worktree ID — safe for parallel use
-- Agent can query all three signal types with a single script
+- Agent can query all three signal types with a single command
 - Teardown is clean and complete
