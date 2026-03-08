@@ -31,7 +31,7 @@ Out of scope:
 
 1. [x] Contract alignment pass: confirm `docs/references/RUNTIME_NATIVE_CLIENT_CONTRACT.md` and `src/runtime/protocol.ts` match for v2 handshake/message validation (status: completed 2026-03-08).
 2. [x] Stream server parity pass: implement or close gaps in daemon/stream handling for v2 `hello`, ack/error semantics, and version-gated outbound messages (status: completed 2026-03-08).
-3. [ ] Runtime ordering hardening pass: fix event sequencing and lifecycle race edges needed for stable native client frame/patch apply under rapid input/resize churn (status: not started).
+3. [x] Runtime ordering hardening pass: fix event sequencing and lifecycle race edges needed for stable native client frame/patch apply under rapid input/resize churn (status: completed 2026-03-08).
 4. [ ] Native client reliability pass: complete `runtime-client-rs` attach loop coverage (subscribe/render/input/resize/reconnect/resync) and error handling needed for daily use (status: not started).
 5. [ ] CLI routing and packaging pass: make `discode attach` prefer native attach in `pty-rust`, keep deterministic fallback, and verify artifact packaging/discovery (status: not started).
 6. [ ] Validation and rollout readiness pass: land focused tests/docs updates and define default-switch gate criteria for native-first attach (status: not started).
@@ -63,6 +63,20 @@ Out of scope:
   - passed: `cargo test --manifest-path daemon-rs/Cargo.toml runtime_stream`
   - passed: `npx vitest run --configLoader runner tests/runtime/protocol.test.ts tests/runtime/stream-server.unit.test.ts`
   - passed: `cargo fmt --manifest-path daemon-rs/Cargo.toml`
+- Milestone 3 completed:
+  - hardened daemon-rs runtime stream ordering to avoid sequence churn and lifecycle race edges under rapid resize/input:
+    - unchanged periodic frames are now suppressed using frame-signature coalescing
+    - `subscribe`, `focus`, and successful `resize` force a fresh full-frame baseline even when content is unchanged
+    - lifecycle transitions clear cached frame signatures so recovery emits deterministic baseline frames
+    - forced frame sends now reset `last_flush` to avoid immediate duplicate tick emissions after lifecycle operations
+  - added regression tests for:
+    - unchanged periodic frame suppression
+    - forced frame emission on resize without content change
+  - updated canonical docs to reflect ordering/coalescing behavior.
+- Verification for this milestone:
+  - passed: `cargo test --manifest-path daemon-rs/Cargo.toml runtime_stream`
+  - passed: `npx vitest run --configLoader runner tests/runtime/protocol.test.ts tests/runtime/stream-server.unit.test.ts`
+  - passed: `cargo fmt --manifest-path daemon-rs/Cargo.toml`
 
 ## Key decisions
 
@@ -74,6 +88,8 @@ Out of scope:
 - Enforce strict canonical `windowId` and strict base64 validation at the stream boundary before runtime API calls.
 - Keep Rust and TypeScript stream servers aligned on v2 handshake and operation error semantics to avoid backend-dependent attach behavior.
 - Treat `patch-v2` as optional for protocol compliance in this phase; full patch/resync behavior remains a follow-up concern.
+- Prefer deterministic baseline frame semantics over maximum frame throughput during lifecycle transitions (`subscribe`/`focus`/`resize`).
+- Coalesce unchanged periodic frames in daemon-rs to stabilize sequence progression under load.
 
 ## Remaining issues / open questions
 
@@ -81,7 +97,7 @@ Out of scope:
 - Which failure classes should auto-fallback to OpenTUI versus hard-fail with remediation guidance?
 - What is the minimum feature parity bar before OpenTUI is no longer the documented primary path?
 - What is the timing for broadening platform support beyond initial macOS/Linux assumptions?
-- Milestone 3 should decide whether to implement `patch-v2` outbound parity now that protocol-level optionality is explicit and handshake/error semantics are aligned.
+- Milestone 4 should decide whether native client-side patch sequencing (`patch-v2` `baseSeq` handling and resync triggers) ships now or remains deferred while `frame-v2` remains primary.
 
 ## Links to related documents
 

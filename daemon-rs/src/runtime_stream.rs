@@ -166,6 +166,7 @@ struct ClientState {
     last_flush: Instant,
     protocol_version: u64,
     seq: u64,
+    last_frame_signature: Option<String>,
 }
 
 fn handle_client<R>(mut stream: UnixStream, runtime: Arc<Mutex<R>>, running: Arc<AtomicBool>)
@@ -182,6 +183,7 @@ where
         last_flush: Instant::now(),
         protocol_version: RUNTIME_STREAM_PROTOCOL_VERSION_V1,
         seq: 0,
+        last_frame_signature: None,
     };
 
     let mut read_buffer = String::new();
@@ -214,7 +216,7 @@ where
         if state.window_id.is_some()
             && state.last_flush.elapsed() >= Duration::from_millis(FRAME_TICK_MS)
         {
-            send_frame(&mut stream, &runtime, &mut state);
+            send_frame(&mut stream, &runtime, &mut state, false);
             state.last_flush = Instant::now();
         }
     }
@@ -328,6 +330,7 @@ where
             state.cols = clamp_u16(cols, 30, 240, 120);
             state.rows = clamp_u16(rows, 10, 120, 40);
             state.missing_notified = false;
+            state.last_frame_signature = None;
             if state.protocol_version >= RUNTIME_STREAM_PROTOCOL_VERSION_V2 {
                 send_message(
                     stream,
@@ -335,7 +338,8 @@ where
                     state.protocol_version,
                 );
             }
-            send_frame(stream, runtime, state);
+            send_frame(stream, runtime, state, true);
+            state.last_flush = Instant::now();
         }
         "focus" => {
             let Some(window_id) = parse_window_id(payload.get("windowId")) else {
@@ -349,6 +353,7 @@ where
 
             state.window_id = Some(window_id.to_string());
             state.missing_notified = false;
+            state.last_frame_signature = None;
             if let Ok(mut guard) = runtime.lock() {
                 let _ = guard.focus_window(window_id);
             }
@@ -366,7 +371,8 @@ where
                     state.protocol_version,
                 );
             }
-            send_frame(stream, runtime, state);
+            send_frame(stream, runtime, state, true);
+            state.last_flush = Instant::now();
         }
         "input" => {
             let Some(window_id) = parse_window_id(payload.get("windowId")) else {
@@ -476,6 +482,7 @@ where
             state.cols = clamp_u16(Some(cols), 30, 240, state.cols);
             state.rows = clamp_u16(Some(rows), 10, 120, state.rows);
             state.missing_notified = false;
+            state.last_frame_signature = None;
 
             let result = runtime
                 .lock()
@@ -501,7 +508,8 @@ where
                     state.protocol_version,
                 );
             }
-            send_frame(stream, runtime, state);
+            send_frame(stream, runtime, state, true);
+            state.last_flush = Instant::now();
         }
         "ping" => {
             let ping_id = match payload.get("id") {
@@ -534,8 +542,12 @@ where
     true
 }
 
-fn send_frame<R>(stream: &mut UnixStream, runtime: &Arc<Mutex<R>>, state: &mut ClientState)
-where
+fn send_frame<R>(
+    stream: &mut UnixStream,
+    runtime: &Arc<Mutex<R>>,
+    state: &mut ClientState,
+    force: bool,
+) where
     R: RuntimeStreamRuntime + Send + 'static,
 {
     let Some(window_id) = state.window_id.clone() else {
@@ -549,7 +561,17 @@ where
 
     match result {
         Some(Ok(frame)) => {
+            let signature = frame_signature(&frame);
+            if !force
+                && state
+                    .last_frame_signature
+                    .as_ref()
+                    .is_some_and(|prev| prev == &signature)
+            {
+                return;
+            }
             state.missing_notified = false;
+            state.last_frame_signature = Some(signature);
             state.seq = state.seq.saturating_add(1);
             if state.protocol_version >= RUNTIME_STREAM_PROTOCOL_VERSION_V2 {
                 send_message(
@@ -571,14 +593,20 @@ where
                 send_window_exit(stream, &window_id, "missing", state.protocol_version);
                 state.missing_notified = true;
             }
+            state.last_frame_signature = None;
         }
         Some(Err(_)) | None => {
             if !state.missing_notified {
                 send_window_exit(stream, &window_id, "not_running", state.protocol_version);
                 state.missing_notified = true;
             }
+            state.last_frame_signature = None;
         }
     }
+}
+
+fn frame_signature(frame: &Value) -> String {
+    frame.to_string()
 }
 
 fn parse_protocol_version(value: Option<&Value>) -> Option<u64> {
@@ -897,6 +925,10 @@ mod tests {
         out
     }
 
+    fn count_occurrences(haystack: &str, needle: &str) -> usize {
+        haystack.match_indices(needle).count()
+    }
+
     #[test]
     fn parses_protocol_versions() {
         assert_eq!(parse_protocol_version(Some(&json!(1))), Some(1));
@@ -1002,6 +1034,57 @@ mod tests {
         assert!(output.contains("\"code\":\"bad_subscribe\""));
         assert!(output.contains("\"code\":\"bad_resize\""));
         assert!(output.contains("Invalid ping.id"));
+
+        service.stop();
+        let _ = fs::remove_file(socket_path);
+    }
+
+    #[test]
+    fn suppresses_unchanged_periodic_frames() {
+        let socket_path = unique_socket_path("drs-coalesce");
+        let runtime = Arc::new(Mutex::new(MockRuntime::default()));
+        let mut service = RuntimeStreamService::new(socket_path.clone(), Arc::clone(&runtime));
+        service.start().expect("stream service should start");
+        wait_for_socket(&socket_path);
+
+        let mut stream = connect_with_retry(&socket_path);
+        write_json_line(&mut stream, json!({ "type": "hello", "version": 2 }));
+        write_json_line(
+            &mut stream,
+            json!({ "type": "subscribe", "windowId": "bridge:coalesce", "cols": 120, "rows": 40 }),
+        );
+        let output = read_for(&mut stream, Duration::from_millis(350));
+
+        assert_eq!(count_occurrences(&output, "\"type\":\"frame-v2\""), 1);
+
+        service.stop();
+        let _ = fs::remove_file(socket_path);
+    }
+
+    #[test]
+    fn resize_forces_fresh_frame_even_without_content_change() {
+        let socket_path = unique_socket_path("drs-resize-force");
+        let runtime = Arc::new(Mutex::new(MockRuntime::default()));
+        let mut service = RuntimeStreamService::new(socket_path.clone(), Arc::clone(&runtime));
+        service.start().expect("stream service should start");
+        wait_for_socket(&socket_path);
+
+        let mut stream = connect_with_retry(&socket_path);
+        write_json_line(&mut stream, json!({ "type": "hello", "version": 2 }));
+        write_json_line(
+            &mut stream,
+            json!({ "type": "subscribe", "windowId": "bridge:resize-force", "cols": 120, "rows": 40 }),
+        );
+        let _ = read_for(&mut stream, Duration::from_millis(150));
+
+        write_json_line(
+            &mut stream,
+            json!({ "type": "resize", "windowId": "bridge:resize-force", "cols": 120, "rows": 40 }),
+        );
+        let output = read_for(&mut stream, Duration::from_millis(250));
+
+        assert!(output.contains("\"op\":\"resize\""));
+        assert_eq!(count_occurrences(&output, "\"type\":\"frame-v2\""), 1);
 
         service.stop();
         let _ = fs::remove_file(socket_path);

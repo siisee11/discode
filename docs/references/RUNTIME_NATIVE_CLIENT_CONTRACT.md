@@ -226,6 +226,8 @@ Operation-level:
 
 - Event ordering is guaranteed per `windowId` by monotonic `seq`.
 - Different windows may interleave.
+- Servers may suppress unchanged periodic frame emissions to reduce sequence churn and transport noise.
+- `subscribe`, `focus`, and successful `resize` should force a fresh full-frame baseline emit even when rendered content is unchanged.
 - Client must treat stream disconnect as transient and retry.
 - Client must not assume input ack means screen update is already rendered.
 
