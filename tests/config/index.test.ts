@@ -2,6 +2,7 @@
  * Tests for ConfigManager
  */
 
+import { readFileSync } from 'fs';
 import { ConfigManager, type StoredConfig } from '../../src/config/index.js';
 import type { IStorage, IEnvironment } from '../../src/types/interfaces.js';
 
@@ -64,6 +65,11 @@ class MockEnvironment implements IEnvironment {
   set(key: string, value: string): void {
     this.vars.set(key, value);
   }
+}
+
+function loadCompatFixture(name: string): unknown {
+  const path = new URL(`../fixtures/compat/${name}`, import.meta.url);
+  return JSON.parse(readFileSync(path, 'utf-8'));
 }
 
 describe('ConfigManager', () => {
@@ -160,10 +166,8 @@ describe('ConfigManager', () => {
       const managerFromEnv = new ConfigManager(storage, env, configDir);
       expect(managerFromEnv.config.runtimeMode).toBe('pty-rust');
 
-      const storedConfig: StoredConfig = {
-        runtimeMode: 'pty-rust',
-      };
-      storage.setFile(configFile, JSON.stringify(storedConfig));
+      const fixture = loadCompatFixture('config-pty-rust-with-unknown.json');
+      storage.setFile(configFile, JSON.stringify(fixture));
       const managerFromStored = new ConfigManager(storage, env, configDir);
       expect(managerFromStored.config.runtimeMode).toBe('pty-rust');
     });
@@ -180,9 +184,28 @@ describe('ConfigManager', () => {
       const managerFromStoredLegacyTs = new ConfigManager(storage, env, configDir);
       expect(managerFromStoredLegacyTs.config.runtimeMode).toBe('tmux');
 
-      storage.setFile(configFile, JSON.stringify({ runtimeMode: 'pty' }));
+      storage.setFile(
+        configFile,
+        JSON.stringify(loadCompatFixture('config-legacy-runtime-mode.json')),
+      );
       const managerFromStored = new ConfigManager(storage, env, configDir);
       expect(managerFromStored.config.runtimeMode).toBe('tmux');
+    });
+
+    it('preserves unknown fields from compat fixture when saving updates', () => {
+      const storage = new MockStorage();
+      const env = new MockEnvironment();
+      storage.setFile(
+        configFile,
+        JSON.stringify(loadCompatFixture('config-pty-rust-with-unknown.json')),
+      );
+
+      const manager = new ConfigManager(storage, env, configDir);
+      manager.saveConfig({ defaultAgentCli: 'claude' });
+
+      const saved = JSON.parse(storage.readFile(configFile, 'utf-8'));
+      expect(saved.customField?.enabled).toBe(true);
+      expect(saved.defaultAgentCli).toBe('claude');
     });
 
     it('normalizes token from stored config and env', () => {

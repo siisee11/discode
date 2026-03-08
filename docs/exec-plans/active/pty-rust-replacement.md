@@ -32,19 +32,31 @@ Out of scope:
 
 1. [x] Contract and gap-baseline pass (status: completed 2026-03-09): produced an implementation checklist of unresolved parity items across runtime control, stream protocol, hook routes, and compatibility loading.
 2. [x] Rust daemon endpoint parity pass (status: completed 2026-03-09): closed remaining `/runtime/*`, hook-route, and stream error/shape mismatches identified for this phase and added focused Rust contract tests.
-3. [ ] Compatibility fixture pass (status: not started): assemble and validate representative config/state/project fixtures (including legacy aliases/maps) against Rust compatibility loaders and persistence behavior.
+3. [x] Compatibility fixture pass (status: completed 2026-03-09): assembled shared config/state/project compatibility fixtures and validated them against Rust compatibility loaders and TS compatibility paths.
 4. [ ] PTY/runtime reliability pass (status: not started): run and fix targeted PTY runtime and stream stress checks required by SLO/canary references.
 5. [ ] Rollout evidence and docs sync pass (status: not started): update canonical architecture/reliability/operations docs and execution-plan evidence so replacement status is auditable and ready to move to completed.
 
 ## Current progress
 
 - Milestone 1 baseline checklist is complete and Milestone 2 endpoint parity pass is complete for `RC-01`, `SP-01`, `SP-02`, and `HR-01`.
+- Milestone 3 fixture pass is complete:
+  - added shared fixture corpus under `tests/fixtures/compat/`:
+    - `state-legacy-maps.json`
+    - `state-legacy-discord-channel-alias.json`
+    - `state-multi-instance-roundtrip.json`
+    - `config-pty-rust-with-unknown.json`
+    - `config-legacy-runtime-mode.json`
+  - wired Rust compatibility tests in `daemon-rs/src/compat.rs` to consume the shared fixtures instead of inline synthetic payloads.
+  - added fixture-driven TS compatibility coverage in `tests/state/state-compatibility.test.ts` and `tests/config/index.test.ts`.
 - Milestone 2 implementation shipped:
   - `daemon-rs/src/runtime_stream.rs` now emits TS-aligned v1 `frame-styled` payloads directly (`lines`/cursor fields; no nested `frame` envelope) and supports incremental `patch-styled` emission for small same-height diffs.
   - `/runtime/ensure` now returns `404 Agent adapter not found` for unsupported `agentType` values, matching TS route behavior.
   - added focused Rust route/stream tests for runtime route status mappings and v1 frame/patch behavior.
 - Rust daemon unit coverage remains green after Milestone 2:
   - passed: `cargo test --manifest-path daemon-rs/Cargo.toml` (40 passed)
+- Fixture validation coverage (Milestone 3):
+  - passed: `cargo test --manifest-path daemon-rs/Cargo.toml`
+  - passed: `npx vitest run --configLoader runner tests/state/state-compatibility.test.ts tests/config/index.test.ts`
 - Contract-suite execution blocker in this sandbox:
   - `npm run test:daemon-contract` failed before test execution because `node_modules` resolves to `/Users/dev/git/discode/node_modules` (outside writable roots) and Vitest could not write `node_modules/.vite-temp/*` (`EPERM`).
 
@@ -72,8 +84,8 @@ Out of scope:
 
 ### Compatibility loading
 
-- [ ] `CL-01` Build a shared fixture corpus (realistic config/state/project JSON) consumed by both TS and daemon-rs compatibility tests; current coverage relies on inline synthetic payloads.
-  - Evidence: daemon-rs compat tests in `daemon-rs/src/compat.rs` lines 417-560; TS state/config compatibility tests in `tests/state/state-compatibility.test.ts` and `tests/config/index.test.ts`.
+- [x] `CL-01` Built a shared fixture corpus (realistic config/state/project JSON) consumed by both TS and daemon-rs compatibility tests.
+  - Evidence: fixtures under `tests/fixtures/compat/`; daemon-rs fixture-driven compat tests in `daemon-rs/src/compat.rs`; TS fixture-driven compatibility tests in `tests/state/state-compatibility.test.ts` and `tests/config/index.test.ts`.
 
 ## Key decisions
 
@@ -84,10 +96,10 @@ Out of scope:
 - Treat all checklist items above as defects or explicit contract-update requirements; no undocumented drift is considered acceptable.
 - Execute Milestone 2 against `RC-01`, `SP-01`, `SP-02`, and `HR-01` in that order to minimize cross-surface regressions.
 - Keep v1 stream patch behavior conservative: emit `patch-styled` only for small same-height diffs and use `frame-styled` fallback otherwise.
+- Treat `tests/fixtures/compat/` as the canonical compatibility fixture corpus and extend it for future migration regressions instead of adding ad-hoc inline payloads.
 
 ## Remaining issues / open questions
 
-- Which concrete fixture corpus will be checked in for `CL-01` (minimum set of legacy maps, alias fields, unknown-field roundtrip, and mixed multi-instance projects)?
 - `npm run test:daemon-contract` cannot run in this sandbox until dependencies are writable inside the worktree; rerun is required in an unsandboxed or reconfigured dependency environment.
 - `RC-02` (Windows runtime transport parity) remains open and should be scoped with Milestone 4 reliability work unless pulled earlier.
 - What exact threshold/time window from canary references will be used to declare final migration completion?

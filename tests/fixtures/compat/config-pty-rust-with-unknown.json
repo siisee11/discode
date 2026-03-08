@@ -1,0 +1,7 @@
+{
+  "hookServerPort": 18470,
+  "runtimeMode": "pty-rust",
+  "customField": {
+    "enabled": true
+  }
+}
