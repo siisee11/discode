@@ -1,0 +1,20 @@
+{
+  "projects": {
+    "demo": {
+      "projectName": "demo",
+      "projectPath": "/tmp/demo",
+      "tmuxSession": "agent-demo",
+      "agents": {},
+      "discordChannels": {},
+      "instances": {
+        "claude": {
+          "instanceId": "claude",
+          "agentType": "claude",
+          "discordChannelId": "legacy-ch-1"
+        }
+      },
+      "createdAt": "2026-03-01T00:00:00.000Z",
+      "lastActive": "2026-03-01T00:00:00.000Z"
+    }
+  }
+}

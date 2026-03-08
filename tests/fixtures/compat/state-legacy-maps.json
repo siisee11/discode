@@ -1,0 +1,23 @@
+{
+  "projects": {
+    "demo": {
+      "projectName": "demo",
+      "projectPath": "/tmp/demo",
+      "tmuxSession": "agent-demo",
+      "agents": {
+        "claude": true
+      },
+      "discordChannels": {
+        "claude": "ch-1"
+      },
+      "tmuxWindows": {
+        "claude": "demo-claude"
+      },
+      "eventHooks": {
+        "claude": true
+      },
+      "createdAt": "2026-03-01T00:00:00.000Z",
+      "lastActive": "2026-03-01T00:00:00.000Z"
+    }
+  }
+}

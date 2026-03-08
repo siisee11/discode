@@ -417,6 +417,7 @@ fn write_pretty_json(path: &Path, value: &Value) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn unique_temp_dir(prefix: &str) -> std::path::PathBuf {
@@ -429,15 +430,35 @@ mod tests {
         path
     }
 
+    fn compat_fixture_path(name: &str) -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("tests")
+            .join("fixtures")
+            .join("compat")
+            .join(name)
+    }
+
+    fn read_compat_fixture_json(name: &str) -> Value {
+        let path = compat_fixture_path(name);
+        let raw = std::fs::read_to_string(&path)
+            .unwrap_or_else(|error| panic!("failed to read fixture {}: {error}", path.display()));
+        serde_json::from_str::<Value>(&raw)
+            .unwrap_or_else(|error| panic!("failed to parse fixture {}: {error}", path.display()))
+    }
+
     #[test]
     fn config_runtime_mode_normalizes_like_typescript() {
+        let runtime_mode_config = read_compat_fixture_json("config-pty-rust-with-unknown.json");
         let config = CompatConfig {
-            raw: serde_json::json!({ "runtimeMode": "pty-rust" }),
+            raw: runtime_mode_config,
         };
         assert_eq!(config.runtime_mode(), "pty-rust");
 
+        let legacy_runtime_mode_config =
+            read_compat_fixture_json("config-legacy-runtime-mode.json");
         let config = CompatConfig {
-            raw: serde_json::json!({ "runtimeMode": "pty" }),
+            raw: legacy_runtime_mode_config,
         };
         assert_eq!(config.runtime_mode(), "tmux");
 
@@ -449,19 +470,7 @@ mod tests {
 
     #[test]
     fn state_loader_normalizes_legacy_maps_to_instances() {
-        let state = serde_json::json!({
-            "projects": {
-                "demo": {
-                    "projectName": "demo",
-                    "projectPath": "/tmp/demo",
-                    "tmuxSession": "agent-demo",
-                    "agents": { "claude": true },
-                    "discordChannels": { "claude": "ch-1" },
-                    "tmuxWindows": { "claude": "demo-claude" },
-                    "eventHooks": { "claude": true }
-                }
-            }
-        });
+        let state = read_compat_fixture_json("state-legacy-maps.json");
 
         let normalized = normalize_state_json(&state);
         let instance = normalized["projects"]["demo"]["instances"]["claude"].clone();
@@ -477,24 +486,7 @@ mod tests {
 
     #[test]
     fn state_loader_supports_legacy_discord_channel_id_alias() {
-        let state = serde_json::json!({
-            "projects": {
-                "demo": {
-                    "projectName": "demo",
-                    "projectPath": "/tmp/demo",
-                    "tmuxSession": "agent-demo",
-                    "agents": {},
-                    "discordChannels": {},
-                    "instances": {
-                        "claude": {
-                            "instanceId": "claude",
-                            "agentType": "claude",
-                            "discordChannelId": "legacy-ch-1"
-                        }
-                    }
-                }
-            }
-        });
+        let state = read_compat_fixture_json("state-legacy-discord-channel-alias.json");
 
         let normalized = normalize_state_json(&state);
         assert_eq!(
@@ -511,27 +503,7 @@ mod tests {
     fn state_roundtrip_preserves_unknown_fields() {
         let dir = unique_temp_dir("discode-daemon-rs-state");
         let path = dir.join(STATE_FILE_NAME);
-        let payload = serde_json::json!({
-            "projects": {
-                "demo": {
-                    "projectName": "demo",
-                    "projectPath": "/tmp/demo",
-                    "tmuxSession": "agent-demo",
-                    "agents": {},
-                    "discordChannels": {},
-                    "customProject": { "value": 1 },
-                    "instances": {
-                        "claude": {
-                            "instanceId": "claude",
-                            "agentType": "claude",
-                            "channelId": "ch-1",
-                            "customInstance": "keep-me"
-                        }
-                    }
-                }
-            },
-            "customRoot": "root-value"
-        });
+        let payload = read_compat_fixture_json("state-multi-instance-roundtrip.json");
         std::fs::write(
             &path,
             serde_json::to_string_pretty(&payload).expect("payload should encode"),
@@ -551,8 +523,16 @@ mod tests {
             Value::Number(1.into())
         );
         assert_eq!(
+            reloaded.normalized()["projects"]["demo"]["instances"]["opencode"]["customInstance"],
+            Value::String("keep-op".to_string())
+        );
+        assert_eq!(
             reloaded.normalized()["projects"]["demo"]["instances"]["claude"]["customInstance"],
-            Value::String("keep-me".to_string())
+            Value::String("keep-claude".to_string())
+        );
+        assert_eq!(
+            reloaded.normalized()["projects"]["demo"]["instances"]["claude"]["channelId"],
+            Value::String("legacy-ch-claude".to_string())
         );
     }
 
@@ -560,11 +540,7 @@ mod tests {
     fn config_roundtrip_preserves_unknown_fields() {
         let dir = unique_temp_dir("discode-daemon-rs-config");
         let path = dir.join(CONFIG_FILE_NAME);
-        let payload = serde_json::json!({
-            "hookServerPort": 18470,
-            "runtimeMode": "pty-rust",
-            "customField": { "enabled": true }
-        });
+        let payload = read_compat_fixture_json("config-pty-rust-with-unknown.json");
         std::fs::write(
             &path,
             serde_json::to_string_pretty(&payload).expect("payload should encode"),

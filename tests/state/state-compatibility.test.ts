@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'fs';
 import { StateManager } from '../../src/state/index.js';
 import type { IStorage } from '../../src/types/interfaces.js';
 import type { ProjectState } from '../../src/types/index.js';
@@ -40,27 +41,21 @@ class MockStorage implements IStorage {
   }
 }
 
+function loadCompatFixture(name: string): unknown {
+  const path = new URL(`../fixtures/compat/${name}`, import.meta.url);
+  return JSON.parse(readFileSync(path, 'utf-8'));
+}
+
 describe('StateManager compatibility', () => {
   const stateDir = '/test/state';
   const stateFile = '/test/state/state.json';
 
   it('normalizes legacy project maps into instances on load', () => {
     const storage = new MockStorage();
-    storage.setFile(stateFile, JSON.stringify({
-      projects: {
-        demo: {
-          projectName: 'demo',
-          projectPath: '/tmp/demo',
-          tmuxSession: 'agent-demo',
-          agents: { claude: true },
-          discordChannels: { claude: 'ch-1' },
-          tmuxWindows: { claude: 'demo-claude' },
-          eventHooks: { claude: true },
-          createdAt: '2026-03-01T00:00:00.000Z',
-          lastActive: '2026-03-01T00:00:00.000Z',
-        },
-      },
-    }));
+    storage.setFile(
+      stateFile,
+      JSON.stringify(loadCompatFixture('state-legacy-maps.json')),
+    );
 
     const manager = new StateManager(storage, stateDir, stateFile);
     const project = manager.getProject('demo');
@@ -76,32 +71,31 @@ describe('StateManager compatibility', () => {
 
   it('maps legacy instances.discordChannelId to channelId', () => {
     const storage = new MockStorage();
-    storage.setFile(stateFile, JSON.stringify({
-      projects: {
-        demo: {
-          projectName: 'demo',
-          projectPath: '/tmp/demo',
-          tmuxSession: 'agent-demo',
-          agents: {},
-          discordChannels: {},
-          instances: {
-            claude: {
-              instanceId: 'claude',
-              agentType: 'claude',
-              discordChannelId: 'legacy-ch-1',
-            },
-          },
-          createdAt: '2026-03-01T00:00:00.000Z',
-          lastActive: '2026-03-01T00:00:00.000Z',
-        },
-      },
-    }));
+    storage.setFile(
+      stateFile,
+      JSON.stringify(loadCompatFixture('state-legacy-discord-channel-alias.json')),
+    );
 
     const manager = new StateManager(storage, stateDir, stateFile);
     const project = manager.getProject('demo');
 
     expect(project?.instances?.claude?.channelId).toBe('legacy-ch-1');
     expect(project?.discordChannels?.claude).toBe('legacy-ch-1');
+  });
+
+  it('preserves unknown fields and normalizes mixed multi-instance fixture', () => {
+    const storage = new MockStorage();
+    storage.setFile(
+      stateFile,
+      JSON.stringify(loadCompatFixture('state-multi-instance-roundtrip.json')),
+    );
+
+    const manager = new StateManager(storage, stateDir, stateFile);
+    const project = manager.getProject('demo') as any;
+
+    expect(project.customProject?.value).toBe(1);
+    expect(project.instances?.claude?.channelId).toBe('legacy-ch-claude');
+    expect(project.discordChannels?.claude).toBe('legacy-ch-claude');
   });
 
   it('persists normalized state on setProject', () => {

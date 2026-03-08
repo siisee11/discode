@@ -9,6 +9,7 @@ Current operational documents:
 - Release checklist: [`release.md`](release.md)
 - Web deployment: [`web-deploy.md`](web-deploy.md)
 - Daemon restart rules: [`daemon-restart.md`](daemon-restart.md)
+- Runtime rollout/readiness checks: [`runtime-rollout-readiness.md`](runtime-rollout-readiness.md)
 - Worktree harness runbook: [`harness.md`](harness.md)
 - Local development runtime switching: [`../../DEVELOPMENT.md`](../../DEVELOPMENT.md)
 

@@ -130,9 +130,11 @@ Detailed module-boundary rules live in [`docs/MODULE_BOUNDARIES.md`](docs/MODULE
 ## Runtime and Process Model
 
 - The default process model is a global daemon plus one or more local agent sessions.
-- Runtime backends are `tmux` and `pty-rust`.
+- Rust daemon (`daemon-rs`) is the canonical daemon backend in the shipped startup path.
+- Runtime modes are `tmux` and `pty-rust` (no legacy runtime aliases).
 - The daemon exposes loopback HTTP endpoints for hooks and runtime control, plus a local stream socket for terminal frames.
-- Rust components are additive packaging targets today: PTY sidecar, native runtime client, and Rust daemon.
+- Rust runtime stream/native attach transport is currently targeted at macOS/Linux; Windows named-pipe parity remains a tracked follow-up.
+- Rust components are first-class production components: PTY sidecar, native runtime client, and Rust daemon.
 
 ## Canonical Topic Guides
 

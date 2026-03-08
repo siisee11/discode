@@ -13,6 +13,7 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 const FRAME_TICK_MS: u64 = 50;
+const V1_PATCH_THRESHOLD_RATIO: f64 = 0.55;
 pub const RUNTIME_STREAM_PROTOCOL_MIN_SUPPORTED_VERSION: u64 = RUNTIME_STREAM_PROTOCOL_VERSION;
 pub const RUNTIME_STREAM_PROTOCOL_MAX_SUPPORTED_VERSION: u64 = 2;
 const RUNTIME_STREAM_PROTOCOL_VERSION_V1: u64 = RUNTIME_STREAM_PROTOCOL_MIN_SUPPORTED_VERSION;
@@ -167,6 +168,10 @@ struct ClientState {
     protocol_version: u64,
     seq: u64,
     last_frame_signature: Option<String>,
+    last_v1_lines: Option<Vec<Value>>,
+    last_v1_cursor_row: u64,
+    last_v1_cursor_col: u64,
+    last_v1_cursor_visible: bool,
 }
 
 fn handle_client<R>(mut stream: UnixStream, runtime: Arc<Mutex<R>>, running: Arc<AtomicBool>)
@@ -184,6 +189,10 @@ where
         protocol_version: RUNTIME_STREAM_PROTOCOL_VERSION_V1,
         seq: 0,
         last_frame_signature: None,
+        last_v1_lines: None,
+        last_v1_cursor_row: 0,
+        last_v1_cursor_col: 0,
+        last_v1_cursor_visible: true,
     };
 
     let mut read_buffer = String::new();
@@ -330,7 +339,7 @@ where
             state.cols = clamp_u16(cols, 30, 240, 120);
             state.rows = clamp_u16(rows, 10, 120, 40);
             state.missing_notified = false;
-            state.last_frame_signature = None;
+            clear_frame_cache(state);
             if state.protocol_version >= RUNTIME_STREAM_PROTOCOL_VERSION_V2 {
                 send_message(
                     stream,
@@ -353,7 +362,7 @@ where
 
             state.window_id = Some(window_id.to_string());
             state.missing_notified = false;
-            state.last_frame_signature = None;
+            clear_frame_cache(state);
             if let Ok(mut guard) = runtime.lock() {
                 let _ = guard.focus_window(window_id);
             }
@@ -482,7 +491,7 @@ where
             state.cols = clamp_u16(Some(cols), 30, 240, state.cols);
             state.rows = clamp_u16(Some(rows), 10, 120, state.rows);
             state.missing_notified = false;
-            state.last_frame_signature = None;
+            clear_frame_cache(state);
 
             let result = runtime
                 .lock()
@@ -580,11 +589,47 @@ fn send_frame<R>(
                     state.protocol_version,
                 );
             } else {
+                let lines = extract_frame_lines(&frame);
+                let (cursor_row, cursor_col, cursor_visible) = extract_frame_cursor(&frame);
+                let patch_ops = state
+                    .last_v1_lines
+                    .as_ref()
+                    .filter(|prev| prev.len() == lines.len())
+                    .map(|prev| build_v1_patch_ops(prev, &lines))
+                    .unwrap_or_default();
+                let patch_limit = (lines.len() as f64 * V1_PATCH_THRESHOLD_RATIO).ceil() as usize;
+                let can_patch = !patch_ops.is_empty() && patch_ops.len() <= patch_limit.max(1);
+
                 send_message(
                     stream,
-                    json!({ "type": "frame-styled", "windowId": window_id, "frame": frame }),
+                    if can_patch {
+                        json!({
+                            "type": "patch-styled",
+                            "windowId": window_id,
+                            "seq": state.seq,
+                            "lineCount": lines.len(),
+                            "ops": patch_ops,
+                            "cursorRow": cursor_row,
+                            "cursorCol": cursor_col,
+                            "cursorVisible": cursor_visible,
+                        })
+                    } else {
+                        json!({
+                            "type": "frame-styled",
+                            "windowId": window_id,
+                            "seq": state.seq,
+                            "lines": lines,
+                            "cursorRow": cursor_row,
+                            "cursorCol": cursor_col,
+                            "cursorVisible": cursor_visible,
+                        })
+                    },
                     state.protocol_version,
                 );
+                state.last_v1_lines = Some(extract_frame_lines(&frame));
+                state.last_v1_cursor_row = cursor_row;
+                state.last_v1_cursor_col = cursor_col;
+                state.last_v1_cursor_visible = cursor_visible;
             }
         }
         Some(Err(RuntimeControlError::WindowNotFound))
@@ -593,20 +638,28 @@ fn send_frame<R>(
                 send_window_exit(stream, &window_id, "missing", state.protocol_version);
                 state.missing_notified = true;
             }
-            state.last_frame_signature = None;
+            clear_frame_cache(state);
         }
         Some(Err(_)) | None => {
             if !state.missing_notified {
                 send_window_exit(stream, &window_id, "not_running", state.protocol_version);
                 state.missing_notified = true;
             }
-            state.last_frame_signature = None;
+            clear_frame_cache(state);
         }
     }
 }
 
 fn frame_signature(frame: &Value) -> String {
     frame.to_string()
+}
+
+fn clear_frame_cache(state: &mut ClientState) {
+    state.last_frame_signature = None;
+    state.last_v1_lines = None;
+    state.last_v1_cursor_row = 0;
+    state.last_v1_cursor_col = 0;
+    state.last_v1_cursor_visible = true;
 }
 
 fn parse_protocol_version(value: Option<&Value>) -> Option<u64> {
@@ -680,13 +733,31 @@ fn is_supported_protocol_version(version: u64) -> bool {
 }
 
 fn frame_to_v2_payload(window_id: &str, seq: u64, frame: &Value) -> Value {
-    let lines = frame
+    let lines = extract_frame_lines(frame);
+    let line_count = lines.len();
+    let (cursor_row, cursor_col, cursor_visible) = extract_frame_cursor(frame);
+
+    json!({
+        "type": "frame-v2",
+        "windowId": window_id,
+        "seq": seq,
+        "cursorRow": cursor_row,
+        "cursorCol": cursor_col,
+        "cursorVisible": cursor_visible,
+        "lineCount": line_count,
+        "lines": lines,
+    })
+}
+
+fn extract_frame_lines(frame: &Value) -> Vec<Value> {
+    frame
         .get("lines")
         .and_then(Value::as_array)
         .cloned()
-        .unwrap_or_default();
-    let line_count = lines.len();
+        .unwrap_or_default()
+}
 
+fn extract_frame_cursor(frame: &Value) -> (u64, u64, bool) {
     let cursor_row = frame
         .get("cursorRow")
         .and_then(Value::as_u64)
@@ -720,17 +791,25 @@ fn frame_to_v2_payload(window_id: &str, seq: u64, frame: &Value) -> Value {
                 .and_then(Value::as_bool)
         })
         .unwrap_or(true);
+    (cursor_row, cursor_col, cursor_visible)
+}
 
-    json!({
-        "type": "frame-v2",
-        "windowId": window_id,
-        "seq": seq,
-        "cursorRow": cursor_row,
-        "cursorCol": cursor_col,
-        "cursorVisible": cursor_visible,
-        "lineCount": line_count,
-        "lines": lines,
-    })
+fn build_v1_patch_ops(previous: &[Value], next: &[Value]) -> Vec<Value> {
+    previous
+        .iter()
+        .zip(next.iter())
+        .enumerate()
+        .filter_map(|(index, (prev, cur))| {
+            if prev == cur {
+                None
+            } else {
+                Some(json!({
+                    "index": index,
+                    "line": cur,
+                }))
+            }
+        })
+        .collect()
 }
 
 fn send_window_exit(stream: &mut UnixStream, window_id: &str, signal: &str, protocol_version: u64) {
@@ -844,6 +923,7 @@ mod tests {
             if !window_id.contains(':') {
                 return Err(RuntimeControlError::InvalidWindowId);
             }
+            let input_count = self.input_calls.load(Ordering::SeqCst);
             Ok(json!({
                 "cursor": {
                     "row": 0,
@@ -854,8 +934,11 @@ mod tests {
                 "cols": cols.unwrap_or(120),
                 "lines": [
                     {
-                        "text": "mock-frame",
-                        "segments": [],
+                        "segments": [
+                            {
+                                "text": format!("mock-frame-{input_count}"),
+                            }
+                        ],
                     }
                 ],
             }))
@@ -968,6 +1051,60 @@ mod tests {
         assert!(output.contains("\"op\":\"subscribe\""));
         assert!(output.contains("\"type\":\"frame-v2\""));
         assert!(!output.contains("\"type\":\"frame-styled\""));
+
+        service.stop();
+        let _ = fs::remove_file(socket_path);
+    }
+
+    #[test]
+    fn v1_emits_direct_frame_styled_payload() {
+        let socket_path = unique_socket_path("drs-v1-frame");
+        let runtime = Arc::new(Mutex::new(MockRuntime::default()));
+        let mut service = RuntimeStreamService::new(socket_path.clone(), Arc::clone(&runtime));
+        service.start().expect("stream service should start");
+        wait_for_socket(&socket_path);
+
+        let mut stream = connect_with_retry(&socket_path);
+        write_json_line(
+            &mut stream,
+            json!({ "type": "subscribe", "windowId": "bridge:v1-frame", "cols": 120, "rows": 40 }),
+        );
+        let output = read_for(&mut stream, Duration::from_millis(250));
+
+        assert!(output.contains("\"type\":\"frame-styled\""));
+        assert!(output.contains("\"lines\":["));
+        assert!(!output.contains("\"frame\":{"));
+
+        service.stop();
+        let _ = fs::remove_file(socket_path);
+    }
+
+    #[test]
+    fn v1_emits_patch_styled_after_incremental_line_change() {
+        let socket_path = unique_socket_path("drs-v1-patch");
+        let runtime = Arc::new(Mutex::new(MockRuntime::default()));
+        let mut service = RuntimeStreamService::new(socket_path.clone(), Arc::clone(&runtime));
+        service.start().expect("stream service should start");
+        wait_for_socket(&socket_path);
+
+        let mut stream = connect_with_retry(&socket_path);
+        let window_id = "bridge:v1-patch";
+        write_json_line(
+            &mut stream,
+            json!({ "type": "subscribe", "windowId": window_id, "cols": 120, "rows": 40 }),
+        );
+        let _ = read_for(&mut stream, Duration::from_millis(150));
+
+        let bytes = base64::engine::general_purpose::STANDARD.encode("hello");
+        write_json_line(
+            &mut stream,
+            json!({ "type": "input", "windowId": window_id, "bytesBase64": bytes }),
+        );
+        let output = read_for(&mut stream, Duration::from_millis(300));
+
+        assert!(output.contains("\"type\":\"input\""));
+        assert!(output.contains("\"type\":\"patch-styled\""));
+        assert!(output.contains("\"ops\":["));
 
         service.stop();
         let _ = fs::remove_file(socket_path);
