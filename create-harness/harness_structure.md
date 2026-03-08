@@ -61,7 +61,7 @@ This is the direction I want:
 ### Non-negotiable rules
 
 * NON_NEGOTIABLE_RULES.md contains absolute rules that block merge unconditionally. No exceptions, no workarounds.
-* Use `create-harness/NON_NEGOTIABLE_RULES.md` as the template. Copy it to the repository root and adapt as needed.
+* Use `create-harness/templates/NON_NEGOTIABLE_RULES.md` as the template. Copy it to the repository root and adapt as needed.
 * AGENTS.md must link to NON_NEGOTIABLE_RULES.md so agents discover it immediately.
 * Rules are enforced mechanically in CI — they are not advisory.
 
