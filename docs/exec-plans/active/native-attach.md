@@ -32,7 +32,7 @@ Out of scope:
 1. [x] Contract alignment pass: confirm `docs/references/RUNTIME_NATIVE_CLIENT_CONTRACT.md` and `src/runtime/protocol.ts` match for v2 handshake/message validation (status: completed 2026-03-08).
 2. [x] Stream server parity pass: implement or close gaps in daemon/stream handling for v2 `hello`, ack/error semantics, and version-gated outbound messages (status: completed 2026-03-08).
 3. [x] Runtime ordering hardening pass: fix event sequencing and lifecycle race edges needed for stable native client frame/patch apply under rapid input/resize churn (status: completed 2026-03-08).
-4. [ ] Native client reliability pass: complete `runtime-client-rs` attach loop coverage (subscribe/render/input/resize/reconnect/resync) and error handling needed for daily use (status: not started).
+4. [x] Native client reliability pass: complete `runtime-client-rs` attach loop coverage (subscribe/render/input/resize/reconnect/resync) and error handling needed for daily use (status: completed 2026-03-08).
 5. [ ] CLI routing and packaging pass: make `discode attach` prefer native attach in `pty-rust`, keep deterministic fallback, and verify artifact packaging/discovery (status: not started).
 6. [ ] Validation and rollout readiness pass: land focused tests/docs updates and define default-switch gate criteria for native-first attach (status: not started).
 
@@ -63,6 +63,19 @@ Out of scope:
   - passed: `cargo test --manifest-path daemon-rs/Cargo.toml runtime_stream`
   - passed: `npx vitest run --configLoader runner tests/runtime/protocol.test.ts tests/runtime/stream-server.unit.test.ts`
   - passed: `cargo fmt --manifest-path daemon-rs/Cargo.toml`
+- Milestone 4 completed:
+  - hardened native client `runtime-client-rs` patch sequencing and resync behavior:
+    - `patch-v2` application now enforces `baseSeq` matching and monotonic `seq`
+    - mismatched/stale `patch-v2` no longer mutates local frame state
+    - client now requests stream resync (`subscribe` + `focus`) when patch sequencing is invalid
+  - improved attach-loop safety during transport transitions:
+    - reset local sequence baseline after reconnect
+    - reset local sequence baseline on window switch to avoid cross-window stale patch application
+  - added unit coverage for patch-v2 happy path and resync-trigger mismatch handling.
+- Verification for this milestone:
+  - passed: `cargo test --manifest-path runtime-client-rs/Cargo.toml`
+  - passed: `cargo fmt --manifest-path runtime-client-rs/Cargo.toml`
+  - passed: `npx vitest run --configLoader runner tests/runtime/protocol.test.ts tests/runtime/stream-server.unit.test.ts`
 - Milestone 3 completed:
   - hardened daemon-rs runtime stream ordering to avoid sequence churn and lifecycle race edges under rapid resize/input:
     - unchanged periodic frames are now suppressed using frame-signature coalescing
@@ -90,6 +103,7 @@ Out of scope:
 - Treat `patch-v2` as optional for protocol compliance in this phase; full patch/resync behavior remains a follow-up concern.
 - Prefer deterministic baseline frame semantics over maximum frame throughput during lifecycle transitions (`subscribe`/`focus`/`resize`).
 - Coalesce unchanged periodic frames in daemon-rs to stabilize sequence progression under load.
+- Ship client-side `patch-v2` sequencing guardrails now (base/seq validation + explicit resync) even while `frame-v2` remains the primary transport baseline.
 
 ## Remaining issues / open questions
 
@@ -97,7 +111,7 @@ Out of scope:
 - Which failure classes should auto-fallback to OpenTUI versus hard-fail with remediation guidance?
 - What is the minimum feature parity bar before OpenTUI is no longer the documented primary path?
 - What is the timing for broadening platform support beyond initial macOS/Linux assumptions?
-- Milestone 4 should decide whether native client-side patch sequencing (`patch-v2` `baseSeq` handling and resync triggers) ships now or remains deferred while `frame-v2` remains primary.
+- Milestone 5 should verify runtime-client artifact discovery and attach fallback behavior across packaging targets (local dev tree vs bundled release artifact layouts).
 
 ## Links to related documents
 
