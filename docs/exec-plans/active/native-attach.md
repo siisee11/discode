@@ -4,15 +4,16 @@ Canonical for: delivering native terminal attach as the primary `runtimeMode=pty
 Audience: contributors working on runtime stream contracts, native client UX, and attach CLI routing  
 Update when: milestone status changes, scope shifts, or rollout decisions change
 
-## Goal and Scope
+## Goal / scope
 
-Ship a production-ready native attach flow for `runtimeMode=pty-rust` where `discode attach` uses the Rust native client by default, while preserving compatibility with existing runtime ownership, stream contracts, and rollback behavior.
+Ship a production-ready native attach flow for `runtimeMode=pty-rust` where `discode attach` uses the Rust native client by default, while preserving runtime ownership, stream compatibility, and deterministic fallback behavior.
 
 In scope:
 
-- stream/control compatibility required for native attach
-- `runtime-client-rs` attach UX and reliability
-- CLI routing, packaging, fallback, and rollout checks
+- stream/control protocol parity required for native attach
+- `runtime-client-rs` reliability for connect, render, input, resize, and reconnect
+- CLI routing, packaging, and fallback policy for native-first attach
+- validation and doc updates required for default-switch readiness
 
 Out of scope:
 
@@ -21,42 +22,41 @@ Out of scope:
 
 ## Background
 
-- The architecture already defines `runtime-client-rs` as the native runtime attach packaging target.
-- Product specs currently document TypeScript/OpenTUI as the primary attach surface, with native attach work in progress.
-- A draft native attach implementation plan and v2 runtime native client contract already exist.
-- The current codebase already contains a native client crate (`runtime-client-rs`) and attach CLI fallback wiring in `src/cli/commands/attach.ts`.
+- `ARCHITECTURE.md` defines `runtime-client-rs` as the native runtime attach packaging target.
+- `docs/product-specs/runtime-attach-experience.md` still documents TypeScript/OpenTUI as primary, so native attach is not yet reflected as shipped behavior.
+- `docs/NATIVE_ATTACH_IMPLEMENTATION_PLAN.md` and `docs/references/RUNTIME_NATIVE_CLIENT_CONTRACT.md` already define the target direction and v2 protocol model.
+- `src/cli/commands/attach.ts` already includes attach routing/fallback logic that can be tightened for native-first behavior.
 
 ## Milestones
 
-1. [ ] Freeze execution scope against existing draft contract and implementation plan (status: not started).
-2. [ ] Complete stream protocol v2 parity and validation paths in daemon/runtime protocol layers (status: not started).
-3. [ ] Harden PTY event ordering/lifecycle behavior needed for native client stability under input/resize churn (status: not started).
-4. [ ] Deliver native client attach MVP reliability pass (connect/subscribe/render/input/resize/reconnect) in `runtime-client-rs` (status: not started).
-5. [ ] Finalize CLI routing and packaging so `discode attach` prefers native attach in `pty-rust` with deterministic fallback behavior (status: not started).
-6. [ ] Run end-to-end validation and update docs/rollout posture to reflect primary native attach behavior (status: not started).
+1. [ ] Contract alignment pass: confirm `docs/references/RUNTIME_NATIVE_CLIENT_CONTRACT.md` and `src/runtime/protocol.ts` match for v2 handshake/message validation (status: not started).
+2. [ ] Stream server parity pass: implement or close gaps in daemon/stream handling for v2 `hello`, ack/error semantics, and version-gated outbound messages (status: not started).
+3. [ ] Runtime ordering hardening pass: fix event sequencing and lifecycle race edges needed for stable native client frame/patch apply under rapid input/resize churn (status: not started).
+4. [ ] Native client reliability pass: complete `runtime-client-rs` attach loop coverage (subscribe/render/input/resize/reconnect/resync) and error handling needed for daily use (status: not started).
+5. [ ] CLI routing and packaging pass: make `discode attach` prefer native attach in `pty-rust`, keep deterministic fallback, and verify artifact packaging/discovery (status: not started).
+6. [ ] Validation and rollout readiness pass: land focused tests/docs updates and define default-switch gate criteria for native-first attach (status: not started).
 
-## Current Progress
+## Current progress
 
-- Required architecture/product/reference docs were reviewed for this execution plan.
-- Native attach direction is already documented in `docs/NATIVE_ATTACH_IMPLEMENTATION_PLAN.md` and `docs/references/RUNTIME_NATIVE_CLIENT_CONTRACT.md`.
-- Runtime attach product docs still describe OpenTUI as primary; this plan tracks the work to close that gap.
-- No milestones in this plan have started yet.
+- Required planning documents were reviewed: `AGENTS.md`, `ARCHITECTURE.md`, `docs/PLANS.md`, native attach references, and runtime attach product spec.
+- Execution plan is now captured in the required checked-in structure.
+- All milestones are currently not started.
 
-## Key Decisions
+## Key decisions
 
-- Keep runtime ownership in daemon + `pty-rust`; native attach is a client replacement, not a runtime replacement.
-- Maintain protocol coexistence so v1 clients continue to work while native attach uses v2.
-- Keep a deterministic fallback path during rollout to reduce regression risk.
-- Treat documentation and rollout gates as part of done criteria, not post-work cleanup.
+- Keep runtime ownership in daemon + `pty-rust`; native attach is a client replacement, not runtime replacement.
+- Preserve v1/v2 coexistence during rollout to avoid breaking existing clients.
+- Keep deterministic fallback behavior during transition to reduce user-facing regressions.
+- Treat tests and canonical docs as part of the definition of done for each phase.
 
-## Remaining Issues or Open Questions
+## Remaining issues / open questions
 
-- Exact default-switch gate: what CI/stress thresholds are required before native attach becomes default for all `pty-rust` users?
-- Fallback policy surface: which failures should auto-fallback versus hard-fail with remediation guidance?
-- Feature parity floor for de-emphasizing OpenTUI: which UX capabilities are mandatory versus follow-up work?
-- Platform scope timing: when to expand beyond macOS/Linux target assumptions for native attach.
+- What exact CI/stress thresholds are required before flipping native attach to default for all `pty-rust` users?
+- Which failure classes should auto-fallback to OpenTUI versus hard-fail with remediation guidance?
+- What is the minimum feature parity bar before OpenTUI is no longer the documented primary path?
+- What is the timing for broadening platform support beyond initial macOS/Linux assumptions?
 
-## Links to Related Documents
+## Links to related documents
 
 - [ARCHITECTURE.md](../../../ARCHITECTURE.md)
 - [docs/PLANS.md](../../PLANS.md)
