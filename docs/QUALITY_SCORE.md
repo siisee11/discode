@@ -11,7 +11,7 @@ Current scorecard:
 | TypeScript correctness | strong baseline | `npm run typecheck`, `tests/**` |
 | Rust component correctness | targeted coverage exists | `daemon-rs` and `runtime-client-rs` cargo tests, sidecar tests |
 | Runtime contract stability | explicitly documented | `docs/references/RUNTIME_WINDOW_API.md`, `docs/references/DAEMON_RUST_MIGRATION.md` |
-| Native attach readiness | rollout-gated and test-backed | `tests/discode-cli.test.ts` native attach/fallback coverage, `docs/exec-plans/active/native-attach.md` gate criteria |
+| Native attach readiness | rollout-gated and test-backed | `tests/discode-cli.test.ts` native attach/fallback coverage, `docs/exec-plans/completed/native-attach.md` gate criteria |
 | Site validation | improving with harness support | `harnesscli boot`, `harnesscli example`, and worktree health checks reduce manual setup |
 | Documentation freshness | improving, still being normalized | indexes in `docs/`, legacy flat docs remain |
 

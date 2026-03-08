@@ -28,4 +28,4 @@ Provide a reliable way to interact with active agent sessions locally while the 
 
 - Runtime contract: [`../references/RUNTIME_WINDOW_API.md`](../references/RUNTIME_WINDOW_API.md)
 - Native attach target contract: [`../references/RUNTIME_NATIVE_CLIENT_CONTRACT.md`](../references/RUNTIME_NATIVE_CLIENT_CONTRACT.md)
-- Native attach execution plan: [`../exec-plans/active/native-attach.md`](../exec-plans/active/native-attach.md)
+- Native attach execution plan: [`../exec-plans/completed/native-attach.md`](../exec-plans/completed/native-attach.md)

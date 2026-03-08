@@ -24,7 +24,7 @@ Out of scope:
 
 - `ARCHITECTURE.md` defines `runtime-client-rs` as the native runtime attach packaging target.
 - `docs/product-specs/runtime-attach-experience.md` still documents TypeScript/OpenTUI as primary, so native attach is not yet reflected as shipped behavior.
-- `docs/NATIVE_ATTACH_IMPLEMENTATION_PLAN.md` and `docs/references/RUNTIME_NATIVE_CLIENT_CONTRACT.md` already define the target direction and v2 protocol model.
+- `docs/references/RUNTIME_NATIVE_CLIENT_CONTRACT.md` defines the v2 protocol model for the shipped native attach flow.
 - `src/cli/commands/attach.ts` already includes attach routing/fallback logic that can be tightened for native-first behavior.
 
 ## Milestones
@@ -152,6 +152,5 @@ Native-first attach remains the default `pty-rust` behavior with OpenTUI fallbac
 - [ARCHITECTURE.md](../../../ARCHITECTURE.md)
 - [docs/PLANS.md](../../PLANS.md)
 - [docs/product-specs/runtime-attach-experience.md](../../product-specs/runtime-attach-experience.md)
-- [docs/NATIVE_ATTACH_IMPLEMENTATION_PLAN.md](../../NATIVE_ATTACH_IMPLEMENTATION_PLAN.md)
 - [docs/references/RUNTIME_NATIVE_CLIENT_CONTRACT.md](../../references/RUNTIME_NATIVE_CLIENT_CONTRACT.md)
 - [docs/exec-plans/completed/README.md](./README.md)
