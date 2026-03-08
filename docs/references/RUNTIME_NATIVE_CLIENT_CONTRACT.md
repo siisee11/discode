@@ -186,6 +186,7 @@ Rules:
 
 - Client applies patch only when `baseSeq` matches local latest.
 - On mismatch, client requests resync by re-subscribing.
+- `patch-v2` is an optional optimization; servers may emit only `frame-v2` while still remaining protocol-compliant.
 
 `window-exit`
 

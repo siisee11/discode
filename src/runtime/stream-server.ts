@@ -228,10 +228,16 @@ export class RuntimeStreamServer {
         client.rows = clampNumber(message.rows, 10, 120, client.rows);
         const parsed = parseRuntimeWindowId(message.windowId);
         if (parsed) {
+          if (!this.runtimeApi.exists(parsed)) {
+            this.sendWindowExit(client, message.windowId, 'missing');
+            return;
+          }
           try {
             this.runtimeApi.resize(parsed, client.cols, client.rows);
           } catch {
-            // best effort; client-side view still updates with requested size
+            this.sendWindowExit(client, message.windowId, 'not_running');
+            incRuntimeMetric('stream_runtime_error');
+            return;
           }
         }
         this.resetClientState(client);

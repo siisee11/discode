@@ -30,7 +30,7 @@ Out of scope:
 ## Milestones
 
 1. [x] Contract alignment pass: confirm `docs/references/RUNTIME_NATIVE_CLIENT_CONTRACT.md` and `src/runtime/protocol.ts` match for v2 handshake/message validation (status: completed 2026-03-08).
-2. [ ] Stream server parity pass: implement or close gaps in daemon/stream handling for v2 `hello`, ack/error semantics, and version-gated outbound messages (status: not started).
+2. [x] Stream server parity pass: implement or close gaps in daemon/stream handling for v2 `hello`, ack/error semantics, and version-gated outbound messages (status: completed 2026-03-08).
 3. [ ] Runtime ordering hardening pass: fix event sequencing and lifecycle race edges needed for stable native client frame/patch apply under rapid input/resize churn (status: not started).
 4. [ ] Native client reliability pass: complete `runtime-client-rs` attach loop coverage (subscribe/render/input/resize/reconnect/resync) and error handling needed for daily use (status: not started).
 5. [ ] CLI routing and packaging pass: make `discode attach` prefer native attach in `pty-rust`, keep deterministic fallback, and verify artifact packaging/discovery (status: not started).
@@ -48,6 +48,21 @@ Out of scope:
   - passed: `npx vitest run --configLoader runner tests/runtime/protocol.test.ts tests/runtime/stream-server.unit.test.ts`
   - passed: `npm run typecheck`
   - environment limitation: socket-based stream integration tests requiring UDS `listen()` fail in this sandbox with `EPERM`; rerun in a non-sandbox environment as part of Milestone 2 validation.
+- Milestone 2 completed:
+  - hardened `daemon-rs/src/runtime_stream.rs` inbound validation parity for `hello`, `subscribe`, `focus`, `input`, `resize`, and `ping`:
+    - malformed `hello.version` now returns `bad_message`
+    - canonical `windowId` validation enforced for stream operations
+    - `subscribe` and `resize` numeric payload validation now returns operation-specific errors (`bad_subscribe`, `bad_resize`)
+    - strict base64 enforcement for `input.bytesBase64`
+    - invalid `ping.id` now returns `bad_message`
+  - tightened resize semantics in both Rust and TS stream servers:
+    - resize ack is now sent only when runtime resize succeeds
+    - missing/non-running windows return `window-exit` (`missing` / `not_running`) without a false-positive ack
+  - updated stream contract references to mark `patch-v2` as an optional optimization and to keep daemon-rs migration docs aligned with implemented error codes.
+- Verification for this milestone:
+  - passed: `cargo test --manifest-path daemon-rs/Cargo.toml runtime_stream`
+  - passed: `npx vitest run --configLoader runner tests/runtime/protocol.test.ts tests/runtime/stream-server.unit.test.ts`
+  - passed: `cargo fmt --manifest-path daemon-rs/Cargo.toml`
 
 ## Key decisions
 
@@ -57,6 +72,8 @@ Out of scope:
 - Treat tests and canonical docs as part of the definition of done for each phase.
 - Make `src/runtime/protocol.ts` the canonical parser/validator surface for stream inbound boundary data to avoid drift between docs and runtime behavior.
 - Enforce strict canonical `windowId` and strict base64 validation at the stream boundary before runtime API calls.
+- Keep Rust and TypeScript stream servers aligned on v2 handshake and operation error semantics to avoid backend-dependent attach behavior.
+- Treat `patch-v2` as optional for protocol compliance in this phase; full patch/resync behavior remains a follow-up concern.
 
 ## Remaining issues / open questions
 
@@ -64,7 +81,7 @@ Out of scope:
 - Which failure classes should auto-fallback to OpenTUI versus hard-fail with remediation guidance?
 - What is the minimum feature parity bar before OpenTUI is no longer the documented primary path?
 - What is the timing for broadening platform support beyond initial macOS/Linux assumptions?
-- Milestone 2 should decide whether to implement `patch-v2` outbound parity (or explicitly defer it) so v2 stream semantics are fully documented and deterministic.
+- Milestone 3 should decide whether to implement `patch-v2` outbound parity now that protocol-level optionality is explicit and handshake/error semantics are aligned.
 
 ## Links to related documents
 

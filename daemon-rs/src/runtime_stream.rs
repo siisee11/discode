@@ -256,7 +256,18 @@ where
 
     match message_type {
         "hello" => {
-            if let Some(version) = parse_protocol_version(payload.get("version")) {
+            let version_raw = payload.get("version");
+            let requested_version = parse_protocol_version(version_raw);
+            if version_raw.is_some() && requested_version.is_none() {
+                send_message(
+                    stream,
+                    json!({ "type": "error", "code": "bad_message", "message": "Invalid hello.version" }),
+                    state.protocol_version,
+                );
+                return true;
+            }
+
+            if let Some(version) = requested_version {
                 if !is_supported_protocol_version(version) {
                     send_message(
                         stream,
@@ -281,18 +292,41 @@ where
             );
         }
         "subscribe" => {
-            let Some(window_id) = payload.get("windowId").and_then(Value::as_str) else {
+            let Some(window_id) = parse_window_id(payload.get("windowId")) else {
                 send_message(
                     stream,
-                    json!({ "type": "error", "code": "bad_subscribe", "message": "Missing windowId" }),
+                    json!({ "type": "error", "code": "bad_subscribe", "message": "Invalid windowId" }),
                     state.protocol_version,
                 );
                 return true;
             };
 
+            let cols = match parse_optional_integer(payload.get("cols")) {
+                Ok(value) => value,
+                Err(()) => {
+                    send_message(
+                        stream,
+                        json!({ "type": "error", "code": "bad_subscribe", "message": "Invalid cols" }),
+                        state.protocol_version,
+                    );
+                    return true;
+                }
+            };
+            let rows = match parse_optional_integer(payload.get("rows")) {
+                Ok(value) => value,
+                Err(()) => {
+                    send_message(
+                        stream,
+                        json!({ "type": "error", "code": "bad_subscribe", "message": "Invalid rows" }),
+                        state.protocol_version,
+                    );
+                    return true;
+                }
+            };
+
             state.window_id = Some(window_id.to_string());
-            state.cols = clamp_u16(payload.get("cols"), 30, 240, 120);
-            state.rows = clamp_u16(payload.get("rows"), 10, 120, 40);
+            state.cols = clamp_u16(cols, 30, 240, 120);
+            state.rows = clamp_u16(rows, 10, 120, 40);
             state.missing_notified = false;
             if state.protocol_version >= RUNTIME_STREAM_PROTOCOL_VERSION_V2 {
                 send_message(
@@ -304,10 +338,10 @@ where
             send_frame(stream, runtime, state);
         }
         "focus" => {
-            let Some(window_id) = payload.get("windowId").and_then(Value::as_str) else {
+            let Some(window_id) = parse_window_id(payload.get("windowId")) else {
                 send_message(
                     stream,
-                    json!({ "type": "error", "code": "bad_focus", "message": "Missing windowId" }),
+                    json!({ "type": "error", "code": "bad_focus", "message": "Invalid windowId" }),
                     state.protocol_version,
                 );
                 return true;
@@ -335,7 +369,7 @@ where
             send_frame(stream, runtime, state);
         }
         "input" => {
-            let Some(window_id) = payload.get("windowId").and_then(Value::as_str) else {
+            let Some(window_id) = parse_window_id(payload.get("windowId")) else {
                 send_message(
                     stream,
                     json!({ "type": "error", "code": "bad_input", "message": "Invalid windowId" }),
@@ -352,6 +386,15 @@ where
                 );
                 return true;
             };
+
+            if !is_strict_base64(bytes_base64) {
+                send_message(
+                    stream,
+                    json!({ "type": "error", "code": "bad_input", "message": "Invalid bytesBase64" }),
+                    state.protocol_version,
+                );
+                return true;
+            }
 
             let decoded = match base64::engine::general_purpose::STANDARD.decode(bytes_base64) {
                 Ok(value) => value,
@@ -397,18 +440,60 @@ where
             }
         }
         "resize" => {
-            let Some(window_id) = payload.get("windowId").and_then(Value::as_str) else {
+            let Some(window_id) = parse_window_id(payload.get("windowId")) else {
+                send_message(
+                    stream,
+                    json!({ "type": "error", "code": "bad_resize", "message": "Invalid windowId" }),
+                    state.protocol_version,
+                );
                 return true;
             };
 
+            let cols = match parse_required_positive_integer(payload.get("cols")) {
+                Some(value) => value,
+                None => {
+                    send_message(
+                        stream,
+                        json!({ "type": "error", "code": "bad_resize", "message": "Invalid size" }),
+                        state.protocol_version,
+                    );
+                    return true;
+                }
+            };
+            let rows = match parse_required_positive_integer(payload.get("rows")) {
+                Some(value) => value,
+                None => {
+                    send_message(
+                        stream,
+                        json!({ "type": "error", "code": "bad_resize", "message": "Invalid size" }),
+                        state.protocol_version,
+                    );
+                    return true;
+                }
+            };
+
             state.window_id = Some(window_id.to_string());
-            state.cols = clamp_u16(payload.get("cols"), 30, 240, state.cols);
-            state.rows = clamp_u16(payload.get("rows"), 10, 120, state.rows);
+            state.cols = clamp_u16(Some(cols), 30, 240, state.cols);
+            state.rows = clamp_u16(Some(rows), 10, 120, state.rows);
             state.missing_notified = false;
 
-            if let Ok(mut guard) = runtime.lock() {
-                let _ = guard.resize_window(window_id, state.cols, state.rows);
+            let result = runtime
+                .lock()
+                .ok()
+                .map(|mut guard| guard.resize_window(window_id, state.cols, state.rows));
+            match result {
+                Some(Err(RuntimeControlError::WindowNotFound))
+                | Some(Err(RuntimeControlError::InvalidWindowId)) => {
+                    send_window_exit(stream, window_id, "missing", state.protocol_version);
+                    return true;
+                }
+                Some(Err(_)) | None => {
+                    send_window_exit(stream, window_id, "not_running", state.protocol_version);
+                    return true;
+                }
+                Some(Ok(())) => {}
             }
+
             if state.protocol_version >= RUNTIME_STREAM_PROTOCOL_VERSION_V2 {
                 send_message(
                     stream,
@@ -419,11 +504,18 @@ where
             send_frame(stream, runtime, state);
         }
         "ping" => {
-            let ping_id = payload
-                .get("id")
-                .and_then(Value::as_str)
-                .unwrap_or_default()
-                .to_string();
+            let ping_id = match payload.get("id") {
+                Some(Value::String(value)) => value.to_string(),
+                Some(_) => {
+                    send_message(
+                        stream,
+                        json!({ "type": "error", "code": "bad_message", "message": "Invalid ping.id" }),
+                        state.protocol_version,
+                    );
+                    return true;
+                }
+                None => String::new(),
+            };
             send_message(
                 stream,
                 json!({ "type": "pong", "id": ping_id }),
@@ -491,10 +583,68 @@ where
 
 fn parse_protocol_version(value: Option<&Value>) -> Option<u64> {
     match value {
-        Some(Value::Number(number)) => number.as_u64(),
+        Some(Value::Number(number)) => {
+            if number.is_u64() {
+                number.as_u64()
+            } else if number.is_i64() {
+                number
+                    .as_i64()
+                    .and_then(|n| if n >= 0 { Some(n as u64) } else { None })
+            } else {
+                None
+            }
+        }
         Some(Value::String(raw)) => raw.parse::<u64>().ok(),
         _ => None,
     }
+}
+
+fn parse_integer(value: &Value) -> Option<i64> {
+    match value {
+        Value::Number(number) => number
+            .as_i64()
+            .or_else(|| number.as_u64().and_then(|n| i64::try_from(n).ok())),
+        Value::String(raw) => raw.trim().parse::<i64>().ok(),
+        _ => None,
+    }
+}
+
+fn parse_optional_integer(value: Option<&Value>) -> Result<Option<i64>, ()> {
+    match value {
+        None => Ok(None),
+        Some(raw) => parse_integer(raw).map(Some).ok_or(()),
+    }
+}
+
+fn parse_required_positive_integer(value: Option<&Value>) -> Option<i64> {
+    let parsed = value.and_then(parse_integer)?;
+    if parsed <= 0 {
+        return None;
+    }
+    Some(parsed)
+}
+
+fn parse_window_id<'a>(value: Option<&'a Value>) -> Option<&'a str> {
+    let raw = value.and_then(Value::as_str)?;
+    let idx = raw.find(':')?;
+    if idx == 0 || idx >= raw.len() - 1 {
+        return None;
+    }
+    Some(raw)
+}
+
+fn is_strict_base64(value: &str) -> bool {
+    if value.is_empty() || value.len() % 4 != 0 {
+        return false;
+    }
+    let decoded = match base64::engine::general_purpose::STANDARD.decode(value) {
+        Ok(bytes) => bytes,
+        Err(_) => return false,
+    };
+    if decoded.is_empty() {
+        return false;
+    }
+    base64::engine::general_purpose::STANDARD.encode(decoded) == value
 }
 
 fn is_supported_protocol_version(version: u64) -> bool {
@@ -582,12 +732,10 @@ fn send_window_exit(stream: &mut UnixStream, window_id: &str, signal: &str, prot
     );
 }
 
-fn clamp_u16(value: Option<&Value>, min: u16, max: u16, fallback: u16) -> u16 {
-    let parsed = value
-        .and_then(Value::as_i64)
-        .filter(|n| *n >= i64::from(min) && *n <= i64::from(max))
-        .map(|n| n as u16);
-    parsed.unwrap_or(fallback)
+fn clamp_u16(value: Option<i64>, min: u16, max: u16, fallback: u16) -> u16 {
+    value
+        .map(|n| n.clamp(i64::from(min), i64::from(max)) as u16)
+        .unwrap_or(fallback)
 }
 
 fn send_message(stream: &mut UnixStream, payload: Value, stream_protocol_version: u64) {
@@ -754,12 +902,14 @@ mod tests {
         assert_eq!(parse_protocol_version(Some(&json!(1))), Some(1));
         assert_eq!(parse_protocol_version(Some(&json!("2"))), Some(2));
         assert_eq!(parse_protocol_version(Some(&json!("x"))), None);
+        assert_eq!(parse_protocol_version(Some(&json!(-1))), None);
     }
 
     #[test]
     fn clamps_dimensions() {
-        assert_eq!(clamp_u16(Some(&json!(80)), 30, 240, 120), 80);
-        assert_eq!(clamp_u16(Some(&json!(10)), 30, 240, 120), 120);
+        assert_eq!(clamp_u16(Some(80), 30, 240, 120), 80);
+        assert_eq!(clamp_u16(Some(10), 30, 240, 120), 30);
+        assert_eq!(clamp_u16(None, 30, 240, 120), 120);
     }
 
     #[test]
@@ -805,6 +955,53 @@ mod tests {
 
         assert!(output.contains("\"code\":\"unsupported_protocol_version\""));
         assert!(output.contains("\"streamProtocolVersion\":2"));
+
+        service.stop();
+        let _ = fs::remove_file(socket_path);
+    }
+
+    #[test]
+    fn rejects_malformed_hello_version() {
+        let socket_path = unique_socket_path("drs-bad-hello");
+        let runtime = Arc::new(Mutex::new(MockRuntime::default()));
+        let mut service = RuntimeStreamService::new(socket_path.clone(), Arc::clone(&runtime));
+        service.start().expect("stream service should start");
+        wait_for_socket(&socket_path);
+
+        let mut stream = connect_with_retry(&socket_path);
+        write_json_line(&mut stream, json!({ "type": "hello", "version": "2.5" }));
+        let output = read_for(&mut stream, Duration::from_millis(200));
+
+        assert!(output.contains("\"code\":\"bad_message\""));
+        assert!(output.contains("Invalid hello.version"));
+
+        service.stop();
+        let _ = fs::remove_file(socket_path);
+    }
+
+    #[test]
+    fn validates_subscribe_resize_and_ping_payloads() {
+        let socket_path = unique_socket_path("drs-validate");
+        let runtime = Arc::new(Mutex::new(MockRuntime::default()));
+        let mut service = RuntimeStreamService::new(socket_path.clone(), Arc::clone(&runtime));
+        service.start().expect("stream service should start");
+        wait_for_socket(&socket_path);
+
+        let mut stream = connect_with_retry(&socket_path);
+        write_json_line(
+            &mut stream,
+            json!({ "type": "subscribe", "windowId": "invalid-window-id" }),
+        );
+        write_json_line(
+            &mut stream,
+            json!({ "type": "resize", "windowId": "bridge:demo", "cols": 100, "rows": "bad" }),
+        );
+        write_json_line(&mut stream, json!({ "type": "ping", "id": 123 }));
+        let output = read_for(&mut stream, Duration::from_millis(250));
+
+        assert!(output.contains("\"code\":\"bad_subscribe\""));
+        assert!(output.contains("\"code\":\"bad_resize\""));
+        assert!(output.contains("Invalid ping.id"));
 
         service.stop();
         let _ = fs::remove_file(socket_path);

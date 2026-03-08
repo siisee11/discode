@@ -70,6 +70,38 @@ function createRuntimeInputErrorMock(): AgentRuntime {
   };
 }
 
+function createRuntimeResizeErrorMock(): AgentRuntime {
+  return {
+    getOrCreateSession: (projectName: string) => projectName,
+    setSessionEnv: () => {},
+    windowExists: () => true,
+    startAgentInWindow: () => {},
+    sendKeysToWindow: () => {},
+    typeKeysToWindow: () => {},
+    sendEnterToWindow: () => {},
+    resizeWindow: () => {
+      throw new Error('window not running');
+    },
+    getWindowBuffer: () => 'abc',
+    getWindowFrame: undefined,
+  };
+}
+
+function createRuntimeMissingWindowMock(): AgentRuntime {
+  return {
+    getOrCreateSession: (projectName: string) => projectName,
+    setSessionEnv: () => {},
+    windowExists: () => false,
+    startAgentInWindow: () => {},
+    sendKeysToWindow: () => {},
+    typeKeysToWindow: () => {},
+    sendEnterToWindow: () => {},
+    resizeWindow: () => {},
+    getWindowBuffer: () => 'abc',
+    getWindowFrame: undefined,
+  };
+}
+
 function createClientState(windowId: string = 'bridge:demo') {
   const writes: unknown[] = [];
   const socket = {
@@ -250,5 +282,43 @@ describe('RuntimeStreamServer (unit flush behavior)', () => {
     const errors = writes.filter((payload: any) => payload?.type === 'error');
     expect(errors.length).toBe(1);
     expect((errors[0] as any).code).toBe('bad_resize');
+  });
+
+  it('emits window-exit missing for resize on missing window without resize ack', () => {
+    const server = new RuntimeStreamServer(createRuntimeMissingWindowMock(), '/tmp/discode-stream-unit-9.sock');
+    const { writes, client } = createClientState('bridge:demo');
+    (client as any).protocolVersion = 2;
+
+    (server as any).handleMessage(client, JSON.stringify({
+      type: 'resize',
+      windowId: 'bridge:demo',
+      cols: 100,
+      rows: 30,
+    }));
+
+    const exits = writes.filter((payload: any) => payload?.type === 'window-exit');
+    const acks = writes.filter((payload: any) => payload?.type === 'ack');
+    expect(exits.length).toBe(1);
+    expect((exits[0] as any).signal).toBe('missing');
+    expect(acks.length).toBe(0);
+  });
+
+  it('emits window-exit not_running for resize runtime failure without resize ack', () => {
+    const server = new RuntimeStreamServer(createRuntimeResizeErrorMock(), '/tmp/discode-stream-unit-10.sock');
+    const { writes, client } = createClientState('bridge:demo');
+    (client as any).protocolVersion = 2;
+
+    (server as any).handleMessage(client, JSON.stringify({
+      type: 'resize',
+      windowId: 'bridge:demo',
+      cols: 100,
+      rows: 30,
+    }));
+
+    const exits = writes.filter((payload: any) => payload?.type === 'window-exit');
+    const acks = writes.filter((payload: any) => payload?.type === 'ack');
+    expect(exits.length).toBe(1);
+    expect((exits[0] as any).signal).toBe('not_running');
+    expect(acks.length).toBe(0);
   });
 });
