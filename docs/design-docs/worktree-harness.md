@@ -19,7 +19,7 @@ This document explains the local harness that boots the Vite-served `site/` surf
 
 ## Launch Contract
 
-[`../../scripts/harness/boot.sh`](../../scripts/harness/boot.sh) is the automation entrypoint. It returns JSON containing:
+`harnesscli boot` is the automation entrypoint. The Rust CLI lives under [`../../harness/Cargo.toml`](../../harness/Cargo.toml) and owns the worktree boot contract directly. The command returns JSON containing:
 
 - `worktree_id`
 - `app_url`
@@ -34,8 +34,8 @@ The command is idempotent for a live worktree instance: if the current worktree 
 
 ## Observability
 
-- [`../../scripts/observability/start.sh`](../../scripts/observability/start.sh) starts a Docker-backed Vector + Victoria stack inside the current worktree runtime area.
-- [`../../scripts/harness/boot.sh`](../../scripts/harness/boot.sh) wires the app to that stack when `DISCODE_OBSERVABILITY=1`.
+- `harnesscli observability start` starts a Docker-backed Vector + Victoria stack inside the current worktree runtime area.
+- `harnesscli boot` wires the app to that stack when `DISCODE_OBSERVABILITY=1`.
 - Logs are posted to Vector over HTTP, while traces and metrics are emitted from the harness dev server through OpenTelemetry OTLP/HTTP exporters.
 
 ## Tradeoffs

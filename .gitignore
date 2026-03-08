@@ -26,3 +26,5 @@ daemon-rs/target/
 daemon-rs/Cargo.lock
 runtime-client-rs/target/
 runtime-client-rs/Cargo.lock
+harness/target/
+harness/Cargo.lock

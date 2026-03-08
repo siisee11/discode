@@ -28,7 +28,7 @@ Build a worktree-aware local harness for the browser-facing `site/` app, observa
 - Completed: repository audit against the checklist; existing docs/harness baseline verified.
 - Completed: phase 1 plan/check-in and phase 2 worktree-aware app boot around the Vite `site/` app.
 - Completed: phase 3 observability lifecycle, phase 4 invariant enforcement, phase 5 recurring cleanup automation, and phase 6 harness/CI tightening.
-- Verified: `./scripts/audit_harness.sh .`, `make smoke`, `make lint`, `npm run typecheck`, and `npm test` all pass as of 2026-03-08.
+- Verified: `cargo build --release --manifest-path harness/Cargo.toml`, `./harness/target/release/harnesscli audit .`, `make smoke`, `make lint`, `npm run typecheck`, and `npm test` all pass as of 2026-03-08.
 
 ## Key Decisions
 

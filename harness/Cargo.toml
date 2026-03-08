@@ -1,0 +1,16 @@
+[package]
+name = "harness"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "harnesscli"
+path = "src/main.rs"
+
+[dependencies]
+regex = "1.11.1"
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"
+serde_yaml = "0.9.34"
+time = { version = "0.3.41", features = ["formatting"] }
+ureq = "2.12.1"

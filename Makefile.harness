@@ -1,23 +1,31 @@
-.PHONY: smoke test lint typecheck check ci scan grade
+.PHONY: smoke test lint typecheck check ci scan grade audit
 
-smoke:
-	@./scripts/harness/smoke.sh
+HARNESSCLI_BIN := ./harness/target/release/harnesscli
 
-test:
-	@./scripts/harness/test.sh
+$(HARNESSCLI_BIN):
+	@cargo build --release --manifest-path harness/Cargo.toml
 
-lint:
-	@./scripts/harness/lint.sh
+smoke: $(HARNESSCLI_BIN)
+	@$(HARNESSCLI_BIN) smoke
 
-typecheck:
-	@./scripts/harness/typecheck.sh
+test: $(HARNESSCLI_BIN)
+	@$(HARNESSCLI_BIN) test
+
+lint: $(HARNESSCLI_BIN)
+	@$(HARNESSCLI_BIN) lint
+
+typecheck: $(HARNESSCLI_BIN)
+	@$(HARNESSCLI_BIN) typecheck
 
 check: lint typecheck
 
-ci: smoke check test
+audit: $(HARNESSCLI_BIN)
+	@$(HARNESSCLI_BIN) audit .
 
-scan:
-	@./scripts/cleanup/scan.sh
+ci: smoke check test audit
 
-grade:
-	@./scripts/cleanup/grade.sh
+scan: $(HARNESSCLI_BIN)
+	@$(HARNESSCLI_BIN) cleanup scan
+
+grade: $(HARNESSCLI_BIN)
+	@$(HARNESSCLI_BIN) cleanup grade

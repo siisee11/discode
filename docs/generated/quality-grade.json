@@ -1,13 +1,13 @@
 {
   "grade": "A+",
   "score": 100,
-  "timestamp": "2026-03-08T04:30:11.020Z",
+  "timestamp": "2026-03-08T09:42:27.410417Z",
   "trend": "steady",
   "breakdown": {
-    "validate-boundaries": {
+    "keep-source-files-focused": {
       "violations": 0,
-      "max_score": 25,
-      "score": 25
+      "max_score": 15,
+      "score": 15
     },
     "no-inline-secrets": {
       "violations": 0,
@@ -24,15 +24,15 @@
       "max_score": 15,
       "score": 15
     },
-    "keep-source-files-focused": {
+    "validate-boundaries": {
       "violations": 0,
-      "max_score": 15,
-      "score": 15
+      "max_score": 25,
+      "score": 25
     }
   },
   "previous": {
     "grade": "A+",
     "score": 100,
-    "timestamp": "2026-03-08T02:32:02.916Z"
+    "timestamp": "2026-03-08T04:30:11.020Z"
   }
 }
