@@ -221,4 +221,34 @@ describe('RuntimeStreamServer (unit flush behavior)', () => {
     expect(exits.length).toBe(1);
     expect((exits[0] as any).signal).toBe('not_running');
   });
+
+  it('returns bad_subscribe for malformed subscribe windowId', () => {
+    const server = new RuntimeStreamServer(createPlainRuntime('abc'), '/tmp/discode-stream-unit-7.sock');
+    const { writes, client } = createClientState('bridge:demo');
+
+    (server as any).handleMessage(client, JSON.stringify({
+      type: 'subscribe',
+      windowId: 'invalid-window-id',
+    }));
+
+    const errors = writes.filter((payload: any) => payload?.type === 'error');
+    expect(errors.length).toBe(1);
+    expect((errors[0] as any).code).toBe('bad_subscribe');
+  });
+
+  it('returns bad_resize for invalid resize payload', () => {
+    const server = new RuntimeStreamServer(createPlainRuntime('abc'), '/tmp/discode-stream-unit-8.sock');
+    const { writes, client } = createClientState('bridge:demo');
+
+    (server as any).handleMessage(client, JSON.stringify({
+      type: 'resize',
+      windowId: 'bridge:demo',
+      cols: 120,
+      rows: 'bad',
+    }));
+
+    const errors = writes.filter((payload: any) => payload?.type === 'error');
+    expect(errors.length).toBe(1);
+    expect((errors[0] as any).code).toBe('bad_resize');
+  });
 });

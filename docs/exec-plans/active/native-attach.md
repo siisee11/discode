@@ -29,7 +29,7 @@ Out of scope:
 
 ## Milestones
 
-1. [ ] Contract alignment pass: confirm `docs/references/RUNTIME_NATIVE_CLIENT_CONTRACT.md` and `src/runtime/protocol.ts` match for v2 handshake/message validation (status: not started).
+1. [x] Contract alignment pass: confirm `docs/references/RUNTIME_NATIVE_CLIENT_CONTRACT.md` and `src/runtime/protocol.ts` match for v2 handshake/message validation (status: completed 2026-03-08).
 2. [ ] Stream server parity pass: implement or close gaps in daemon/stream handling for v2 `hello`, ack/error semantics, and version-gated outbound messages (status: not started).
 3. [ ] Runtime ordering hardening pass: fix event sequencing and lifecycle race edges needed for stable native client frame/patch apply under rapid input/resize churn (status: not started).
 4. [ ] Native client reliability pass: complete `runtime-client-rs` attach loop coverage (subscribe/render/input/resize/reconnect/resync) and error handling needed for daily use (status: not started).
@@ -39,8 +39,15 @@ Out of scope:
 ## Current progress
 
 - Required planning documents were reviewed: `AGENTS.md`, `ARCHITECTURE.md`, `docs/PLANS.md`, native attach references, and runtime attach product spec.
-- Execution plan is now captured in the required checked-in structure.
-- All milestones are currently not started.
+- Milestone 1 completed:
+  - added canonical runtime stream v2 inbound validation in `src/runtime/protocol.ts` (version parsing/support checks + operation-specific payload validation)
+  - wired `RuntimeStreamServer` to use protocol validators instead of ad-hoc message checks
+  - added protocol contract tests in `tests/runtime/protocol.test.ts` and extended stream server unit checks for `bad_subscribe`/`bad_resize`
+  - updated `docs/references/RUNTIME_NATIVE_CLIENT_CONTRACT.md` to match enforced handshake and validation behavior
+- Verification for this milestone:
+  - passed: `npx vitest run --configLoader runner tests/runtime/protocol.test.ts tests/runtime/stream-server.unit.test.ts`
+  - passed: `npm run typecheck`
+  - environment limitation: socket-based stream integration tests requiring UDS `listen()` fail in this sandbox with `EPERM`; rerun in a non-sandbox environment as part of Milestone 2 validation.
 
 ## Key decisions
 
@@ -48,6 +55,8 @@ Out of scope:
 - Preserve v1/v2 coexistence during rollout to avoid breaking existing clients.
 - Keep deterministic fallback behavior during transition to reduce user-facing regressions.
 - Treat tests and canonical docs as part of the definition of done for each phase.
+- Make `src/runtime/protocol.ts` the canonical parser/validator surface for stream inbound boundary data to avoid drift between docs and runtime behavior.
+- Enforce strict canonical `windowId` and strict base64 validation at the stream boundary before runtime API calls.
 
 ## Remaining issues / open questions
 
@@ -55,6 +64,7 @@ Out of scope:
 - Which failure classes should auto-fallback to OpenTUI versus hard-fail with remediation guidance?
 - What is the minimum feature parity bar before OpenTUI is no longer the documented primary path?
 - What is the timing for broadening platform support beyond initial macOS/Linux assumptions?
+- Milestone 2 should decide whether to implement `patch-v2` outbound parity (or explicitly defer it) so v2 stream semantics are fully documented and deterministic.
 
 ## Links to related documents
 
