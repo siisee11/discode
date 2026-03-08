@@ -33,7 +33,7 @@ Out of scope:
 2. [x] Stream server parity pass: implement or close gaps in daemon/stream handling for v2 `hello`, ack/error semantics, and version-gated outbound messages (status: completed 2026-03-08).
 3. [x] Runtime ordering hardening pass: fix event sequencing and lifecycle race edges needed for stable native client frame/patch apply under rapid input/resize churn (status: completed 2026-03-08).
 4. [x] Native client reliability pass: complete `runtime-client-rs` attach loop coverage (subscribe/render/input/resize/reconnect/resync) and error handling needed for daily use (status: completed 2026-03-08).
-5. [ ] CLI routing and packaging pass: make `discode attach` prefer native attach in `pty-rust`, keep deterministic fallback, and verify artifact packaging/discovery (status: not started).
+5. [x] CLI routing and packaging pass: make `discode attach` prefer native attach in `pty-rust`, keep deterministic fallback, and verify artifact packaging/discovery (status: completed 2026-03-08).
 6. [ ] Validation and rollout readiness pass: land focused tests/docs updates and define default-switch gate criteria for native-first attach (status: not started).
 
 ## Current progress
@@ -76,6 +76,18 @@ Out of scope:
   - passed: `cargo test --manifest-path runtime-client-rs/Cargo.toml`
   - passed: `cargo fmt --manifest-path runtime-client-rs/Cargo.toml`
   - passed: `npx vitest run --configLoader runner tests/runtime/protocol.test.ts tests/runtime/stream-server.unit.test.ts`
+- Milestone 5 completed:
+  - tightened native attach binary discovery in `src/cli/commands/attach.ts` for packaged installs:
+    - added module-resolution lookup for `@siisee11/discode-runtime-client-<platform>-<arch>`
+    - expanded deterministic filesystem hint roots for release artifact layouts
+    - preserved explicit override support via `DISCODE_RUNTIME_CLIENT_BIN`
+  - hardened fallback behavior for `DISCODE_NATIVE_ATTACH=auto`:
+    - auto mode now only attempts native attach when a concrete artifact path is discovered
+    - PATH probing fallback is retained only for explicit `DISCODE_NATIVE_ATTACH=on`
+  - added CLI test coverage for packaged artifact discovery from `dist/release/runtime-client/...` layout.
+- Verification for this milestone:
+  - passed: `npx vitest run --configLoader runner tests/discode-cli.test.ts`
+  - passed: `npm run typecheck`
 - Milestone 3 completed:
   - hardened daemon-rs runtime stream ordering to avoid sequence churn and lifecycle race edges under rapid resize/input:
     - unchanged periodic frames are now suppressed using frame-signature coalescing
@@ -104,6 +116,8 @@ Out of scope:
 - Prefer deterministic baseline frame semantics over maximum frame throughput during lifecycle transitions (`subscribe`/`focus`/`resize`).
 - Coalesce unchanged periodic frames in daemon-rs to stabilize sequence progression under load.
 - Ship client-side `patch-v2` sequencing guardrails now (base/seq validation + explicit resync) even while `frame-v2` remains the primary transport baseline.
+- Keep auto-mode native attach deterministic by requiring an actual discovered runtime-client artifact instead of implicit PATH lookup.
+- Prefer package-resolution discovery before cwd-relative guesses so global npm installs find native runtime-client binaries reliably.
 
 ## Remaining issues / open questions
 
@@ -111,7 +125,7 @@ Out of scope:
 - Which failure classes should auto-fallback to OpenTUI versus hard-fail with remediation guidance?
 - What is the minimum feature parity bar before OpenTUI is no longer the documented primary path?
 - What is the timing for broadening platform support beyond initial macOS/Linux assumptions?
-- Milestone 5 should verify runtime-client artifact discovery and attach fallback behavior across packaging targets (local dev tree vs bundled release artifact layouts).
+- Milestone 6 should finalize rollout gates and canonical docs that still describe OpenTUI as primary attach behavior.
 
 ## Links to related documents
 

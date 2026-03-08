@@ -1,4 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
+import { join } from 'path';
+import { tmpdir } from 'os';
 
 const mocks = vi.hoisted(() => {
   const stateManager = {
@@ -452,6 +455,67 @@ describe('CLI flow safety (stage 1)', () => {
     else process.env.DISCODE_NATIVE_ATTACH = oldNative;
     if (oldBin === undefined) delete process.env.DISCODE_RUNTIME_CLIENT_BIN;
     else process.env.DISCODE_RUNTIME_CLIENT_BIN = oldBin;
+  });
+
+  it('attach (pty-rust): discovers packaged runtime client artifact in dist/release layout', async () => {
+    const mod = await import('../bin/discode.ts');
+    const project = {
+      projectName: 'demo',
+      projectPath: '/work/demo',
+      tmuxSession: 'agent-bridge',
+      createdAt: new Date(),
+      lastActive: new Date(),
+      agents: { claude: true },
+      discordChannels: { claude: 'ch-1' },
+      instances: {
+        claude: { instanceId: 'claude', agentType: 'claude', tmuxWindow: 'demo-claude', channelId: 'ch-1' },
+      },
+    };
+    const oldRepo = process.env.DISCODE_REPO;
+    const oldNative = process.env.DISCODE_NATIVE_ATTACH;
+    const oldBin = process.env.DISCODE_RUNTIME_CLIENT_BIN;
+    const tempRoot = mkdtempSync(join(tmpdir(), 'discode-native-attach-layout-'));
+
+    const platformTag = process.platform === 'win32' ? 'windows' : process.platform;
+    const archTag = process.arch;
+    const binaryName = process.platform === 'win32' ? 'discode-runtime-client.exe' : 'discode-runtime-client';
+    const binaryPath = join(
+      tempRoot,
+      'dist',
+      'release',
+      'runtime-client',
+      `discode-runtime-client-${platformTag}-${archTag}`,
+      'bin',
+      binaryName,
+    );
+    mkdirSync(join(binaryPath, '..'), { recursive: true });
+    writeFileSync(binaryPath, '#!/bin/sh\nexit 0\n');
+
+    try {
+      process.env.DISCODE_REPO = tempRoot;
+      delete process.env.DISCODE_NATIVE_ATTACH;
+      delete process.env.DISCODE_RUNTIME_CLIENT_BIN;
+      mocks.config.runtimeMode = 'pty-rust';
+      mocks.stateManager.getProject.mockReturnValue(project);
+      mocks.spawnSync.mockReturnValueOnce({ status: 0, error: undefined });
+
+      await mod.attachCommand('demo', { instance: 'claude' });
+
+      expect(mocks.spawnSync).toHaveBeenCalledWith(
+        binaryPath,
+        ['--socket', expect.any(String), '--window-id', 'agent-bridge:demo-claude', '--daemon-port', '18470'],
+        { stdio: 'inherit' },
+      );
+      expect(mocks.tuiCommand).not.toHaveBeenCalled();
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+      if (oldRepo === undefined) delete process.env.DISCODE_REPO;
+      else process.env.DISCODE_REPO = oldRepo;
+      if (oldNative === undefined) delete process.env.DISCODE_NATIVE_ATTACH;
+      else process.env.DISCODE_NATIVE_ATTACH = oldNative;
+      if (oldBin === undefined) delete process.env.DISCODE_RUNTIME_CLIENT_BIN;
+      else process.env.DISCODE_RUNTIME_CLIENT_BIN = oldBin;
+    }
   });
 
   it('attach (pty-rust): falls back to tui when native attach exits non-zero', async () => {
