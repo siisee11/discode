@@ -6,7 +6,7 @@ Apply the following phases in order to scaffold a complete harness engineering s
 
 ## Phase 1: Repository Documentation Structure
 
-Apply the instructions in `harness_structure.md`.
+Apply the instructions in [`1_harness_structure.md`](./1_harness_structure.md).
 
 This phase sets up the documentation hierarchy:
 
@@ -35,7 +35,7 @@ Key rules:
 
 ## Phase 2: Execution Environment Setup
 
-Apply the instructions in `execution-env-setup.md`.
+Apply the instructions in [`2_execution-env-setup.md`](./2_execution-env-setup.md).
 
 This phase makes the app bootable per Git worktree for isolated development:
 
@@ -52,7 +52,7 @@ This phase makes the app bootable per Git worktree for isolated development:
 
 ## Phase 3: Observability Stack
 
-Apply the instructions in `observability-stack-setup.md`.
+Apply the instructions in [`3_observability-stack-setup.md`](./3_observability-stack-setup.md).
 
 This phase sets up ephemeral, per-worktree telemetry so the agent can query logs, metrics, and traces:
 
@@ -71,7 +71,7 @@ This phase sets up ephemeral, per-worktree telemetry so the agent can query logs
 
 ## Phase 4: Enforce Invariants
 
-Apply the instructions in `enforce-invariants.md`.
+Apply the instructions in [`4_enforce-invariants.md`](./4_enforce-invariants.md).
 
 This phase enforces architectural boundaries and taste mechanically via custom linters and structural tests:
 
@@ -89,7 +89,7 @@ This phase enforces architectural boundaries and taste mechanically via custom l
 
 ## Phase 5: Recurring Cleanup Process
 
-Apply the instructions in `recurring-cleanup.md`.
+Apply the instructions in [`5_recurring-cleanup.md`](./5_recurring-cleanup.md).
 
 This phase encodes golden principles and builds automated garbage collection for technical debt:
 
@@ -106,7 +106,7 @@ This phase encodes golden principles and builds automated garbage collection for
 
 ## Phase 6: Ralph Loop (Autonomous Agent Loop)
 
-Apply the instructions in `ralph-loop.md`.
+Apply the instructions in [`6_ralph-loop.md`](./6_ralph-loop.md).
 
 This phase builds the automated coding agent loop that drives a task from prompt to pull request:
 
@@ -126,7 +126,7 @@ This phase builds the automated coding agent loop that drives a task from prompt
 
 ## Phase 7: Harness Engineering Audit
 
-Apply the instructions in `implement-harness-audit.md`.
+Apply the instructions in [`7_implement-harness-audit.md`](./7_implement-harness-audit.md).
 
 This is the final phase — it verifies everything from all prior phases is wired together and passing:
 
