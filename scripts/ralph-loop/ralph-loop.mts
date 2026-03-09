@@ -4,28 +4,17 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+import { parseArgs } from './lib/cli-options.mts';
 import { CodexClient } from './lib/codex-client.mts';
 import { runCodingLoop } from './lib/coding-loop.mts';
-import { defaultPlanFilename, slugifyPrompt } from './lib/prompts.mts';
+import { defaultPlanFilename } from './lib/prompts.mts';
 import { runPrAgent } from './lib/pr-agent.mts';
 import { runSetupAgent } from './lib/setup-agent.mts';
 import { cleanupWorktree, ensureRalphLogPath, initWorktree } from './lib/worktree.mts';
 
-interface CliOptions {
-  prompt: string;
-  model: string;
-  baseBranch: string;
-  maxIterations: number;
-  workBranch: string;
-  timeoutSeconds: number;
-  approvalPolicy: string;
-  sandbox: string;
-  preserveWorktree: boolean;
-}
-
 async function main(): Promise<void> {
-  const options = parseArgs(process.argv.slice(2));
   const repoRoot = findRepoRoot();
+  const options = parseArgs(process.argv.slice(2), repoRoot);
 
   const worktree = await initWorktree({
     repoRoot,
@@ -123,72 +112,6 @@ async function main(): Promise<void> {
       });
     }
   }
-}
-
-function parseArgs(args: string[]): CliOptions {
-  const promptParts: string[] = [];
-  const options: Omit<CliOptions, 'prompt'> = {
-    model: 'gpt-5.3-codex',
-    baseBranch: 'main',
-    maxIterations: 20,
-    workBranch: '',
-    timeoutSeconds: 21600,
-    approvalPolicy: 'never',
-    sandbox: 'workspace-write',
-    preserveWorktree: false,
-  };
-
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
-    switch (arg) {
-      case '--model':
-        options.model = requireValue(args, ++index, '--model');
-        break;
-      case '--base-branch':
-        options.baseBranch = requireValue(args, ++index, '--base-branch');
-        break;
-      case '--max-iterations':
-        options.maxIterations = Number.parseInt(requireValue(args, ++index, '--max-iterations'), 10);
-        break;
-      case '--work-branch':
-        options.workBranch = requireValue(args, ++index, '--work-branch');
-        break;
-      case '--timeout':
-        options.timeoutSeconds = Number.parseInt(requireValue(args, ++index, '--timeout'), 10);
-        break;
-      case '--approval-policy':
-        options.approvalPolicy = requireValue(args, ++index, '--approval-policy');
-        break;
-      case '--sandbox':
-        options.sandbox = requireValue(args, ++index, '--sandbox');
-        break;
-      case '--preserve-worktree':
-        options.preserveWorktree = true;
-        break;
-      default:
-        promptParts.push(arg);
-        break;
-    }
-  }
-
-  const prompt = promptParts.join(' ').trim();
-  if (!prompt) {
-    throw new Error('Usage: ralph-loop "<user prompt>" [options]');
-  }
-
-  return {
-    prompt,
-    ...options,
-    workBranch: options.workBranch || `ralph/${slugifyPrompt(prompt).slice(0, 48)}`,
-  };
-}
-
-function requireValue(args: string[], index: number, flag: string): string {
-  const value = args[index];
-  if (!value) {
-    throw new Error(`Missing value for ${flag}`);
-  }
-  return value;
 }
 
 function resolveSandbox(mode: string, worktreePath: string): string | Record<string, unknown> {

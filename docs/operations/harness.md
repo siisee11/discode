@@ -14,7 +14,7 @@ Update when: harness commands, environment variables, or troubleshooting steps c
 - Start observability for the current worktree: `./harness/target/release/harnesscli observability start`
 - Stop observability for the current worktree: `./harness/target/release/harnesscli observability stop`
 - Query logs, metrics, or traces: `./harness/target/release/harnesscli observability query <logs|metrics|traces> '<query>'`
-- Run the automated coding loop: `npm run ralph-loop -- "<task prompt>"`
+- Run the automated coding loop: `npm run ralph-loop -- "<task prompt>"` or `npm run ralph-loop -- --prd`
 - Run without a prebuilt binary: `cargo run --manifest-path harness/Cargo.toml -- <subcommand>`
 
 ## Environment
@@ -42,6 +42,7 @@ Update when: harness commands, environment variables, or troubleshooting steps c
 2. Start `npm run ralph-loop -- "<task prompt>" --work-branch ralph/<task-slug>`.
 3. The loop creates a checked-in execution plan, iterates one milestone per Codex turn, and then opens a PR when it reaches `<promise>COMPLETE</promise>`.
 4. Pass `--preserve-worktree` to keep the generated worktree for debugging after the run.
+5. Pass `--prd` to read the task prompt from `PRD.md` at the repo root. Ralph loop clears `PRD.md` immediately after reading it.
 
 ## Agent-Browser Example
 

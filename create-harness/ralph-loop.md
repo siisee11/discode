@@ -33,6 +33,7 @@ The Ralph Loop has three phases:
 
 ```
 ralph-loop "<user prompt>" [options]
+ralph-loop --prd [options]
 
 Options:
   --model <model>          Codex model to use (default: gpt-5.3-codex)
@@ -42,6 +43,7 @@ Options:
   --timeout <seconds>      Max wall-clock time for entire run (default: 21600 = 6h)
   --approval-policy <p>    Codex approval policy (default: never)
   --sandbox <policy>       Codex sandbox policy (default: workspace-write)
+  --prd                    Read the task prompt from PRD.md at the repo root, then clear PRD.md
 ```
 
 ---
