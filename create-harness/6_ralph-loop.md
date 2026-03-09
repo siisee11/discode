@@ -304,6 +304,8 @@ scripts/ralph-loop/
 │   └── worktree.mts        # Calls init.sh, parses output, handles cleanup
 ```
 
+A reference implementation is available under `create-harness/references/scripts/ralph-loop/`. Copy it into `scripts/ralph-loop/` as a starting point, then adapt it to the target repository's CLI, prompts, and verification flow.
+
 ### The codex-client module
 
 This is the core integration. It should:

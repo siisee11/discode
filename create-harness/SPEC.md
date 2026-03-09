@@ -38,7 +38,7 @@ The [`harness-scaffolding-checklist.md`](./harness-scaffolding-checklist.md) tra
 - **Every command has a test.** Tests live as `#[cfg(test)]` modules or under `harness/tests/`.
 - **Worktree isolation.** All runtime resources (ports, temp dirs, data dirs, logs) are derived from a deterministic worktree ID.
 - **No blind sleeps.** Readiness is healthcheck-based.
-- **Portable.** This directory contains only instructions, templates, and references — no runtime code. The generated harness lives in the target repository.
+- **Portable.** This directory contains only instructions, templates, and reference artifacts. Any generated harness code still lives in the target repository.
 
 ## Directory Structure
 
@@ -53,6 +53,6 @@ create-harness/
 ├── 5_recurring-cleanup.md           # Phase 5 instructions
 ├── 6_ralph-loop.md                  # Phase 6 instructions
 ├── 7_implement-harness-audit.md     # Phase 7 instructions
-├── references/                      # LLM-friendly reference docs to seed into target repo
+├── references/                      # LLM-friendly docs and reference implementations
 └── templates/                       # Template files (e.g. NON_NEGOTIABLE_RULES.md)
 ```

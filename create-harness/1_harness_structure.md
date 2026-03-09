@@ -54,8 +54,9 @@ This is the direction I want:
 * Make it clear which document is canonical for each topic, who it is for, and when it should be updated.
 
 ### Reference documents
-* When scaffolding `docs/references/`, copy the contents of `create-harness/references/` into `docs/references/`.
+* When scaffolding `docs/references/`, copy the documentation-oriented contents of `create-harness/references/` into `docs/references/`.
 * These are pre-curated LLM-friendly reference files (e.g., `codex-app-server-llm.txt`) that give agents context about external tools, frameworks, and patterns used by the project.
+* If `create-harness/references/` also contains reference implementations such as `scripts/ralph-loop/`, copy those into the matching repository path instead of under `docs/references/`.
 * Add project-specific references over time as new dependencies or external integrations are introduced.
 
 ### Non-negotiable rules
