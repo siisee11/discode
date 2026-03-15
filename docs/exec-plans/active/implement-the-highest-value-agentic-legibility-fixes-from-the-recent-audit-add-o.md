@@ -33,7 +33,7 @@ This plan sequences those fixes so future coding loops have a single startup pat
 
 ## Milestones
 
-1. `not started` - Audit current setup/bootstrap and command/task discovery surfaces (`AGENTS.md`, `ARCHITECTURE.md`, key docs) and choose the canonical bootstrap entrypoint path.
+1. `completed` - Audit current setup/bootstrap and command/task discovery surfaces (`AGENTS.md`, `ARCHITECTURE.md`, key docs) and choose the canonical bootstrap entrypoint path.
 2. `not started` - Add the canonical setup/bootstrap entrypoint document and route existing canonical docs to it.
 3. `not started` - Tighten root `AGENTS.md` to index primary command/task surfaces alongside the doc tree while preserving map-only constraints.
 4. `not started` - Add ADR structure under `docs/` (index/location + minimal template) and create the initial decision record for docs + ADR policy.
@@ -42,17 +42,20 @@ This plan sequences those fixes so future coding loops have a single startup pat
 ## Current Progress
 
 - Plan created and checked in.
-- Implementation milestones have not started.
+- Milestone 1 completed on 2026-03-15 after auditing setup/bootstrap and command/task discovery surfaces:
+  - setup and onboarding guidance is currently split across `README.md`, `docs/product-specs/new-user-onboarding.md`, and integration-specific guides in `docs/references/`
+  - contributor/runtime bootstrap details currently live in `DEVELOPMENT.md` and operations docs, but there is no single canonical bootstrap page
+  - primary command/task surfaces to index in `AGENTS.md` during milestone 3 are `bin/discode.ts` (CLI surface), `Makefile.harness` (`smoke`, `test`, `lint`, `typecheck`, `audit`, `ci`, `ralph-loop`), and `package.json` workflow scripts (`harness:*`, `ralph-loop`, quality/release scripts)
 
 ## Key Decisions
 
 - Keep this work documentation-first and constrained to legibility/discoverability surfaces.
 - Use one canonical bootstrap entrypoint and route from existing docs rather than duplicating procedural setup instructions.
 - Introduce ADRs with a minimal template and explicit policy record to avoid fragmented decision history.
+- Canonical setup/bootstrap entrypoint path will be a new `docs/operations/bootstrap.md` document, linked from root discovery docs and existing setup references in milestone 2.
 
 ## Remaining Issues / Open Questions
 
-- Confirm which existing file should serve as the canonical bootstrap entrypoint versus introducing a new dedicated doc.
 - Confirm naming and placement convention for ADR files (for example, numeric prefix vs. slug-only) based on repository norms.
 - Determine the minimal lightweight checks that best validate touched docs in this repository (`harnesscli audit .`, targeted lint, or both).
 
