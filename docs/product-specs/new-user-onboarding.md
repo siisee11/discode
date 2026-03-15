@@ -23,6 +23,7 @@ Help a new user get from install to a working remote-controlled agent session wi
 
 ## Canonical References
 
+- Setup/bootstrap entrypoint: [`../operations/bootstrap.md`](../operations/bootstrap.md)
 - User-facing setup detail: [`../references/DISCORD_SETUP.md`](../references/DISCORD_SETUP.md), [`../references/SLACK_SETUP.md`](../references/SLACK_SETUP.md)
 - Architecture and entrypoints: [`../../ARCHITECTURE.md`](../../ARCHITECTURE.md)
 - Local development variants: [`../../DEVELOPMENT.md`](../../DEVELOPMENT.md)

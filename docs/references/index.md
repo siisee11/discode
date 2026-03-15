@@ -6,6 +6,7 @@ Update when: a reference document is added, replaced, or materially changed
 
 Current reference set:
 
+- Canonical setup/bootstrap entrypoint: [`../operations/bootstrap.md`](../operations/bootstrap.md)
 - Codex app-server protocol: [`codex-app-server-llm.txt`](codex-app-server-llm.txt)
 - Setup guides: [`DISCORD_SETUP.md`](DISCORD_SETUP.md), [`SLACK_SETUP.md`](SLACK_SETUP.md)
 - Runtime contracts: [`RUNTIME_WINDOW_API.md`](RUNTIME_WINDOW_API.md), [`RUNTIME_NATIVE_CLIENT_CONTRACT.md`](RUNTIME_NATIVE_CLIENT_CONTRACT.md)

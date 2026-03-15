@@ -138,6 +138,7 @@ Detailed module-boundary rules live in [`docs/MODULE_BOUNDARIES.md`](docs/MODULE
 
 ## Canonical Topic Guides
 
+- Setup/bootstrap entrypoint: [`docs/operations/bootstrap.md`](docs/operations/bootstrap.md)
 - Design rationale: [`docs/DESIGN.md`](docs/DESIGN.md)
 - Product behavior: [`docs/PRODUCT_SENSE.md`](docs/PRODUCT_SENSE.md)
 - Reliability and operations: [`docs/RELIABILITY.md`](docs/RELIABILITY.md)
