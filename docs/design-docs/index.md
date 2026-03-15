@@ -6,6 +6,7 @@ Update when: a design doc is added, replaced, or materially re-scoped
 
 | Document | Status | Verified against code | Canonical for | Update when |
 | --- | --- | --- | --- | --- |
+| [`../decisions/index.md`](../decisions/index.md) | active | 2026-03-15 | ADR location, naming policy, and decision record index | ADR policy or ADR status/index changes |
 | [`core-beliefs.md`](core-beliefs.md) | active | 2026-03-07 | project principles and decision defaults | principles or product posture change |
 | [`worktree-harness.md`](worktree-harness.md) | active | 2026-03-08 | worktree boot contract, browser harness design, and observability integration | harness scripts, launch contract, or observability flow change |
 | [`../MODULE_BOUNDARIES.md`](../MODULE_BOUNDARIES.md) | active | 2026-03-07 | dependency direction and module ownership | package or import boundaries change |

@@ -10,6 +10,10 @@ AGENTS.md
 ARCHITECTURE.md
 NON_NEGOTIABLE_RULES.md
 docs/
+├── decisions/
+│   ├── index.md
+│   ├── adr-template.md
+│   └── 0001-docs-and-decision-record-policy.md
 ├── design-docs/
 │   ├── index.md
 │   ├── core-beliefs.md
@@ -58,6 +62,7 @@ docs/
 
 - Product questions or behavior changes: [`docs/product-specs/index.md`](docs/product-specs/index.md)
 - Architecture tradeoffs or domain boundaries: [`docs/design-docs/index.md`](docs/design-docs/index.md)
+- ADR policy and decision history: [`docs/decisions/index.md`](docs/decisions/index.md)
 - Release, deployment, or daemon operations: [`docs/operations/index.md`](docs/operations/index.md)
 - Contracts and low-level references: [`docs/references/index.md`](docs/references/index.md)
 - Checked-in execution plans: [`docs/exec-plans/active/README.md`](docs/exec-plans/active/README.md)

@@ -8,6 +8,7 @@ Start with [`design-docs/index.md`](design-docs/index.md), then open only the re
 
 Current canonical design documents:
 
+- ADR policy and decision history: [`decisions/index.md`](decisions/index.md)
 - Core product and engineering beliefs: [`design-docs/core-beliefs.md`](design-docs/core-beliefs.md)
 - Module dependency rules: [`MODULE_BOUNDARIES.md`](MODULE_BOUNDARIES.md)
 - PTY Rust architecture contract: [`references/PTY_RUST_ARCHITECTURE_CONTRACT.md`](references/PTY_RUST_ARCHITECTURE_CONTRACT.md)

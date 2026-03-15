@@ -37,7 +37,7 @@ This plan sequences those fixes so future coding loops have a single startup pat
 2. `completed` - Add the canonical setup/bootstrap entrypoint document and route existing canonical docs to it.
 3. `completed` - Tighten root `AGENTS.md` to index primary command/task surfaces alongside the doc tree while preserving map-only constraints.
 4. `completed` - Add ADR structure under `docs/` (index/location + minimal template) and create the initial decision record for docs + ADR policy.
-5. `not started` - Update any impacted canonical index docs for discoverability and run lightweight validation for touched documentation surfaces.
+5. `completed` - Update any impacted canonical index docs for discoverability and run lightweight validation for touched documentation surfaces.
 
 ## Current Progress
 
@@ -62,6 +62,12 @@ This plan sequences those fixes so future coding loops have a single startup pat
   - added minimal ADR template at `docs/decisions/adr-template.md`
   - added initial ADR `docs/decisions/0001-docs-and-decision-record-policy.md` capturing docs routing and ADR lifecycle policy
   - lightweight check run: verified ADR files and required metadata sections (`adr-surface-sanity: ok`)
+- Milestone 5 completed on 2026-03-15:
+  - updated canonical discoverability docs to surface ADR location and policy entrypoints:
+    - `AGENTS.md` reference tree and task routing now include `docs/decisions/index.md`
+    - `docs/DESIGN.md` now routes decision history to `docs/decisions/index.md`
+    - `docs/design-docs/index.md` now indexes `docs/decisions/index.md` as an active canonical document
+  - lightweight check run: targeted markdown link validation across touched canonical docs (`docs-link-check: ok`)
 
 ## Key Decisions
 
@@ -72,10 +78,11 @@ This plan sequences those fixes so future coding loops have a single startup pat
 - Bootstrap entrypoint remains concise and routing-focused (not a full manual), with detailed instructions delegated to existing reference docs.
 - `AGENTS.md` command/task indexing stays surface-level (entrypoints + file pointers), while procedural details remain in canonical docs and command definitions.
 - ADR naming/placement convention: zero-padded numeric ADRs under `docs/decisions/`, authored from `docs/decisions/adr-template.md`.
+- Lightweight verification policy for these doc-only changes: targeted link-target validation on touched canonical docs is sufficient for milestone checks.
 
 ## Remaining Issues / Open Questions
 
-- Determine the minimal lightweight checks that best validate touched docs in this repository (`harnesscli audit .`, targeted lint, or both).
+- None for the scoped legibility milestones in this plan.
 
 ## Links to Related Documents
 
