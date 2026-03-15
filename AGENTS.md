@@ -21,6 +21,10 @@ docs/
 ├── generated/
 │   ├── db-schema.md
 │   └── ...
+├── operations/
+│   ├── index.md
+│   ├── bootstrap.md
+│   └── ...
 ├── product-specs/
 │   ├── index.md
 │   ├── new-user-onboarding.md
@@ -40,6 +44,7 @@ docs/
 ## Start Here
 
 - System map and entrypoints: [`ARCHITECTURE.md`](ARCHITECTURE.md)
+- Setup/bootstrap entrypoint: [`docs/operations/bootstrap.md`](docs/operations/bootstrap.md)
 - Absolute merge blockers: [`NON_NEGOTIABLE_RULES.md`](NON_NEGOTIABLE_RULES.md)
 - Design rationale and decision records: [`docs/DESIGN.md`](docs/DESIGN.md)
 - Feature intent and product behavior: [`docs/PRODUCT_SENSE.md`](docs/PRODUCT_SENSE.md)
@@ -58,6 +63,14 @@ docs/
 - Checked-in execution plans: [`docs/exec-plans/active/README.md`](docs/exec-plans/active/README.md)
 - Completed execution history: [`docs/exec-plans/completed/README.md`](docs/exec-plans/completed/README.md)
 - Generated repository facts: [`docs/generated/db-schema.md`](docs/generated/db-schema.md)
+
+## Primary Command/Task Surfaces
+
+- End-user CLI command surface (onboard/new/attach/stop/config/daemon/tui): [`bin/discode.ts`](bin/discode.ts)
+- TUI entrypoint: [`bin/tui.tsx`](bin/tui.tsx)
+- Setup/bootstrap command starting points: [`docs/operations/bootstrap.md`](docs/operations/bootstrap.md)
+- Standard local quality/task targets (`smoke`, `test`, `lint`, `typecheck`, `audit`, `ci`, `ralph-loop`): [`Makefile.harness`](Makefile.harness)
+- Scripted task surfaces (`harness:*`, `ralph-loop`, release/packaging flows): [`package.json`](package.json)
 
 ## Working Rules
 

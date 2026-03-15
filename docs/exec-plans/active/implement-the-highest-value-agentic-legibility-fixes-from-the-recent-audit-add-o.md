@@ -35,7 +35,7 @@ This plan sequences those fixes so future coding loops have a single startup pat
 
 1. `completed` - Audit current setup/bootstrap and command/task discovery surfaces (`AGENTS.md`, `ARCHITECTURE.md`, key docs) and choose the canonical bootstrap entrypoint path.
 2. `completed` - Add the canonical setup/bootstrap entrypoint document and route existing canonical docs to it.
-3. `not started` - Tighten root `AGENTS.md` to index primary command/task surfaces alongside the doc tree while preserving map-only constraints.
+3. `completed` - Tighten root `AGENTS.md` to index primary command/task surfaces alongside the doc tree while preserving map-only constraints.
 4. `not started` - Add ADR structure under `docs/` (index/location + minimal template) and create the initial decision record for docs + ADR policy.
 5. `not started` - Update any impacted canonical index docs for discoverability and run lightweight validation for touched documentation surfaces.
 
@@ -51,6 +51,12 @@ This plan sequences those fixes so future coding loops have a single startup pat
   - routed canonical setup references to bootstrap entrypoint from `docs/operations/index.md`, `docs/product-specs/new-user-onboarding.md`, `docs/references/index.md`, and `ARCHITECTURE.md`
   - kept detailed platform setup instructions in `docs/references/DISCORD_SETUP.md` and `docs/references/SLACK_SETUP.md`, with bootstrap as the start point
   - lightweight check run: verified all newly linked routing targets exist on disk (`docs-link-target-existence: ok`)
+- Milestone 3 completed on 2026-03-15:
+  - tightened root `AGENTS.md` without converting it into a manual
+  - expanded the doc-tree map to include `docs/operations/` and `bootstrap.md`
+  - added `Start Here` routing for the canonical setup/bootstrap entrypoint
+  - added a dedicated `Primary Command/Task Surfaces` section indexing `bin/discode.ts`, `bin/tui.tsx`, `Makefile.harness`, and `package.json`
+  - lightweight check run: verified new `AGENTS.md` link targets exist on disk (`agents-link-target-existence: ok`)
 
 ## Key Decisions
 
@@ -59,6 +65,7 @@ This plan sequences those fixes so future coding loops have a single startup pat
 - Introduce ADRs with a minimal template and explicit policy record to avoid fragmented decision history.
 - Canonical setup/bootstrap entrypoint path will be a new `docs/operations/bootstrap.md` document, linked from root discovery docs and existing setup references in milestone 2.
 - Bootstrap entrypoint remains concise and routing-focused (not a full manual), with detailed instructions delegated to existing reference docs.
+- `AGENTS.md` command/task indexing stays surface-level (entrypoints + file pointers), while procedural details remain in canonical docs and command definitions.
 
 ## Remaining Issues / Open Questions
 
