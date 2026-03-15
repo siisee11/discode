@@ -6,6 +6,7 @@ Update when: release steps, deployment steps, or restart expectations change
 
 Current operational documents:
 
+- Setup/bootstrap entrypoint: [`bootstrap.md`](bootstrap.md)
 - Release checklist: [`release.md`](release.md)
 - Web deployment: [`web-deploy.md`](web-deploy.md)
 - Daemon restart rules: [`daemon-restart.md`](daemon-restart.md)

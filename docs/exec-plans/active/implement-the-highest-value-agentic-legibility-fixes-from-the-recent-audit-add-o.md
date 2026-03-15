@@ -34,7 +34,7 @@ This plan sequences those fixes so future coding loops have a single startup pat
 ## Milestones
 
 1. `completed` - Audit current setup/bootstrap and command/task discovery surfaces (`AGENTS.md`, `ARCHITECTURE.md`, key docs) and choose the canonical bootstrap entrypoint path.
-2. `not started` - Add the canonical setup/bootstrap entrypoint document and route existing canonical docs to it.
+2. `completed` - Add the canonical setup/bootstrap entrypoint document and route existing canonical docs to it.
 3. `not started` - Tighten root `AGENTS.md` to index primary command/task surfaces alongside the doc tree while preserving map-only constraints.
 4. `not started` - Add ADR structure under `docs/` (index/location + minimal template) and create the initial decision record for docs + ADR policy.
 5. `not started` - Update any impacted canonical index docs for discoverability and run lightweight validation for touched documentation surfaces.
@@ -46,6 +46,11 @@ This plan sequences those fixes so future coding loops have a single startup pat
   - setup and onboarding guidance is currently split across `README.md`, `docs/product-specs/new-user-onboarding.md`, and integration-specific guides in `docs/references/`
   - contributor/runtime bootstrap details currently live in `DEVELOPMENT.md` and operations docs, but there is no single canonical bootstrap page
   - primary command/task surfaces to index in `AGENTS.md` during milestone 3 are `bin/discode.ts` (CLI surface), `Makefile.harness` (`smoke`, `test`, `lint`, `typecheck`, `audit`, `ci`, `ralph-loop`), and `package.json` workflow scripts (`harness:*`, `ralph-loop`, quality/release scripts)
+- Milestone 2 completed on 2026-03-15:
+  - added canonical bootstrap entrypoint doc at `docs/operations/bootstrap.md`
+  - routed canonical setup references to bootstrap entrypoint from `docs/operations/index.md`, `docs/product-specs/new-user-onboarding.md`, `docs/references/index.md`, and `ARCHITECTURE.md`
+  - kept detailed platform setup instructions in `docs/references/DISCORD_SETUP.md` and `docs/references/SLACK_SETUP.md`, with bootstrap as the start point
+  - lightweight check run: verified all newly linked routing targets exist on disk (`docs-link-target-existence: ok`)
 
 ## Key Decisions
 
@@ -53,6 +58,7 @@ This plan sequences those fixes so future coding loops have a single startup pat
 - Use one canonical bootstrap entrypoint and route from existing docs rather than duplicating procedural setup instructions.
 - Introduce ADRs with a minimal template and explicit policy record to avoid fragmented decision history.
 - Canonical setup/bootstrap entrypoint path will be a new `docs/operations/bootstrap.md` document, linked from root discovery docs and existing setup references in milestone 2.
+- Bootstrap entrypoint remains concise and routing-focused (not a full manual), with detailed instructions delegated to existing reference docs.
 
 ## Remaining Issues / Open Questions
 
