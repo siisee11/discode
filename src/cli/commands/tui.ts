@@ -178,10 +178,14 @@ async function connectRuntimeSessionWithRecovery(session: RuntimeSessionManager)
 export async function tuiCommand(options: TmuxCliOptions): Promise<void> {
   const effectiveConfig = applyTmuxCliOverrides(config, options);
   const runtimePort = effectiveConfig.hookServerPort || 18470;
+  const runtimeModeAtLaunch = effectiveConfig.runtimeMode || 'tmux';
+  const runtimeSessionRequired = isPtyRuntimeMode(runtimeModeAtLaunch);
   let keepChannelOnStop = getConfigValue('keepChannelOnStop') === true;
 
   const session = new RuntimeSessionManager(runtimePort);
-  await connectRuntimeSessionWithRecovery(session);
+  if (runtimeSessionRequired) {
+    await connectRuntimeSessionWithRecovery(session);
+  }
 
   const isBunRuntime = Boolean((process as { versions?: { bun?: string } }).versions?.bun);
   if (!isBunRuntime) {
@@ -265,7 +269,6 @@ export async function tuiCommand(options: TmuxCliOptions): Promise<void> {
   }
   const currentSession = runtimeInitialWindow?.sessionName || tmux.getCurrentSession(process.env.TMUX_PANE);
   const currentWindow = runtimeInitialWindow?.windowName || tmux.getCurrentWindow(process.env.TMUX_PANE);
-  const runtimeModeAtLaunch = effectiveConfig.runtimeMode || 'tmux';
   const daemonLogFile = getDaemonLogFilePath();
   let runtimeBackendCache: { mtimeMs: number; status: RuntimeBackendStatus | undefined } | undefined;
 
@@ -335,7 +338,7 @@ export async function tuiCommand(options: TmuxCliOptions): Promise<void> {
       onAttachProject: async (project: string) => {
         reloadStateFromDisk();
         const runtimeTarget = resolveRuntimeWindowForProject(project, effectiveConfig.tmux);
-        if (runtimeTarget && session.isSupported() !== false) {
+        if (runtimeSessionRequired && runtimeTarget && session.isSupported() !== false) {
           const focused = await session.focusWindow(runtimeTarget.windowId);
           if (focused) {
             return {
@@ -447,6 +450,13 @@ export async function tuiCommand(options: TmuxCliOptions): Promise<void> {
         return session.registerFrameListener(listener);
       },
       getRuntimeStatus: async () => {
+        if (!runtimeSessionRequired) {
+          return {
+            mode: 'stream' as const,
+            connected: false,
+            detail: 'disabled for tmux runtime',
+          };
+        }
         await session.ensureConnected();
         return session.getTransportStatus();
       },
