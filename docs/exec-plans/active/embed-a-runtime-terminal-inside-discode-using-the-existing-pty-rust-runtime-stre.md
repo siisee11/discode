@@ -35,7 +35,7 @@ Out of scope:
 1. [x] Discovery and integration seam freeze: identify the exact discode runtime UI embedding surface and current stream/control call graph, then lock a compatibility-preserving implementation seam. (status: completed 2026-04-10)
 2. [x] Embedded terminal host implementation: wire runtime subscribe/focus/input/resize lifecycle into discode UI flow and render runtime frames inside discode using existing contracts. (status: completed 2026-04-10)
 3. [x] Rendering ownership convergence pass: refactor touched runtime rendering paths so terminal-state mutation, screen projection, and renderer serialization remain inside the documented Zellij-style module ownership boundaries. (status: completed 2026-04-10)
-4. [ ] Test updates and reliability pass: add/update targeted Rust + TypeScript tests for embedded rendering, input/resize/focus behavior, stream ordering assumptions, and regressions. (status: not started)
+4. [x] Test updates and reliability pass: add/update targeted Rust + TypeScript tests for embedded rendering, input/resize/focus behavior, stream ordering assumptions, and regressions. (status: completed 2026-04-10)
 5. [ ] Canonical docs and plan completion pass: update architecture/product/frontend/reference docs for shipped embedded-terminal behavior and record final progress/decisions in this plan. (status: not started)
 6. [ ] Final validation and PR publication: run required quality gates, stage final changes, and open the PR with a clear compatibility/risk summary. (status: not started)
 
@@ -93,6 +93,20 @@ Out of scope:
     - `tests/cli/common/runtime-terminal-renderer.test.ts`
   - passed: `npx vitest run --configLoader runner tests/cli/common/runtime-terminal-renderer.test.ts tests/cli/common/runtime-terminal-screen.test.ts tests/cli/common/runtime-terminal-host.test.ts tests/cli/commands/tui.test.ts`
   - passed: `npm run -s typecheck`
+- M4 test and reliability pass complete:
+  - added TypeScript lifecycle/reliability tests for the embedded host in `tests/cli/common/runtime-terminal-embedded-host.test.ts`:
+    - non-TTY short-circuit behavior
+    - focus + subscribe bootstrap + resize wiring
+    - key input forwarding and ctrl+q shutdown
+    - VT arrow-key input mapping regression coverage
+  - added Rust stream-ordering regression test in `daemon-rs/src/runtime_stream.rs`:
+    - `focus_forces_fresh_frame_even_without_content_change`
+    - verifies focus emits an ack + forced fresh `frame-v2` baseline even without content changes
+  - revalidated adjacent reliability behavior for resize and burst churn in the same runtime-stream suite
+- M4 targeted checks:
+  - passed: `npx vitest run --configLoader runner tests/cli/common/runtime-terminal-embedded-host.test.ts tests/cli/common/runtime-terminal-host.test.ts tests/cli/common/runtime-terminal-screen.test.ts tests/cli/common/runtime-terminal-renderer.test.ts tests/cli/commands/tui.test.ts`
+  - passed: `cargo test --manifest-path daemon-rs/Cargo.toml runtime_stream::tests`
+  - passed: `npm run -s typecheck`
 
 ## Key decisions
 
@@ -105,11 +119,13 @@ Out of scope:
 - Make embedded host the preferred runtime terminal when running in a local TTY, with deterministic fallback to native attach when embedded launch is unavailable.
 - Keep embedded rendering as a contract-preserving adapter over `RuntimeSessionManager` instead of introducing new stream or control-plane message shapes.
 - Align touched TypeScript rendering ownership with Zellij-style layering by isolating screen projection and renderer serialization into dedicated modules used by the host shell.
+- Treat focus-triggered fresh frame emission as a required stream ordering invariant and keep it protected by daemon-rs unit coverage.
+- Treat embedded-host key mapping and resize/focus lifecycle wiring as regression-sensitive behavior with dedicated TypeScript tests.
 
 ## Remaining issues / open questions
 
-- Validate whether any existing stream ordering assumptions in UI code need tightening for embedded rendering under rapid resize/input churn.
-- Decide whether reliability pass (M4) should include additional integration-style coverage for embedded host redraw cadence under rapid resize + frame churn.
+- Canonical docs still need to be updated for shipped embedded-terminal-first behavior and ownership layering (M5).
+- Final end-to-end validation matrix and PR publication are pending (M6).
 
 ## Links to related documents
 

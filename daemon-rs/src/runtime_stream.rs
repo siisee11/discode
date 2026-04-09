@@ -1228,6 +1228,35 @@ mod tests {
     }
 
     #[test]
+    fn focus_forces_fresh_frame_even_without_content_change() {
+        let socket_path = unique_socket_path("drs-focus-force");
+        let runtime = Arc::new(Mutex::new(MockRuntime::default()));
+        let mut service = RuntimeStreamService::new(socket_path.clone(), Arc::clone(&runtime));
+        service.start().expect("stream service should start");
+        wait_for_socket(&socket_path);
+
+        let mut stream = connect_with_retry(&socket_path);
+        write_json_line(&mut stream, json!({ "type": "hello", "version": 2 }));
+        write_json_line(
+            &mut stream,
+            json!({ "type": "subscribe", "windowId": "bridge:focus-force", "cols": 120, "rows": 40 }),
+        );
+        let _ = read_for(&mut stream, Duration::from_millis(150));
+
+        write_json_line(
+            &mut stream,
+            json!({ "type": "focus", "windowId": "bridge:focus-force" }),
+        );
+        let output = read_for(&mut stream, Duration::from_millis(250));
+
+        assert!(output.contains("\"op\":\"focus\""));
+        assert_eq!(count_occurrences(&output, "\"type\":\"frame-v2\""), 1);
+
+        service.stop();
+        let _ = fs::remove_file(socket_path);
+    }
+
+    #[test]
     fn handles_concurrent_stream_clients() {
         let socket_path = unique_socket_path("drs-conc");
         let runtime = Arc::new(Mutex::new(MockRuntime::default()));
