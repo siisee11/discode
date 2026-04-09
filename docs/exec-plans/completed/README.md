@@ -6,6 +6,8 @@ Update when: an active plan completes or a legacy plan is indexed here
 
 Currently indexed completed plans and execution-heavy design notes:
 
+- [`embedded-runtime-terminal.md`](embedded-runtime-terminal.md)
+- [`embed-a-runtime-terminal-inside-discode-using-the-existing-pty-rust-runtime-stre.md`](embed-a-runtime-terminal-inside-discode-using-the-existing-pty-rust-runtime-stre.md)
 - [`pty-rust-replacement.md`](pty-rust-replacement.md)
 - [`native-attach.md`](native-attach.md)
 - [`harness-scaffolding.md`](harness-scaffolding.md)
