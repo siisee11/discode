@@ -129,7 +129,8 @@ Out of scope:
     - added mocked `getProjectRuntimeSession(...)` alongside `getInstanceRuntimeWindow(...)` to keep instance-state mocks aligned with `src/state/instances.js`
   - updated one delivery-guidance assertion in `tests/bridge/message-router.test.ts` to match current user-facing wording (`agent runtime window is not running`)
   - passed full quality gate: `make -f Makefile.harness ci`
-  - published PR from `ralph/embedded-runtime-terminal` with compatibility/risk summary in the PR description
+  - published PR from `ralph/embedded-runtime-terminal` with compatibility/risk summary in the PR description:
+    - https://github.com/siisee11/discode/pull/17
 
 ## Key decisions
 
