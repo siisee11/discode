@@ -138,7 +138,8 @@ export async function tuiCommand(options: TmuxCliOptions): Promise<void> {
       return;
     }
 
-    const launchResult = openRuntimeTerminal({
+    const launchResult = await openRuntimeTerminal({
+      session,
       windowId: runtimeInitialWindow.windowId,
       runtimePort,
     });

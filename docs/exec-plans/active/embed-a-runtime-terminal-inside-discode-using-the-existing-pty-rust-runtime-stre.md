@@ -33,7 +33,7 @@ Out of scope:
 ## Milestones
 
 1. [x] Discovery and integration seam freeze: identify the exact discode runtime UI embedding surface and current stream/control call graph, then lock a compatibility-preserving implementation seam. (status: completed 2026-04-10)
-2. [ ] Embedded terminal host implementation: wire runtime subscribe/focus/input/resize lifecycle into discode UI flow and render runtime frames inside discode using existing contracts. (status: not started)
+2. [x] Embedded terminal host implementation: wire runtime subscribe/focus/input/resize lifecycle into discode UI flow and render runtime frames inside discode using existing contracts. (status: completed 2026-04-10)
 3. [ ] Rendering ownership convergence pass: refactor touched runtime rendering paths so terminal-state mutation, screen projection, and renderer serialization remain inside the documented Zellij-style module ownership boundaries. (status: not started)
 4. [ ] Test updates and reliability pass: add/update targeted Rust + TypeScript tests for embedded rendering, input/resize/focus behavior, stream ordering assumptions, and regressions. (status: not started)
 5. [ ] Canonical docs and plan completion pass: update architecture/product/frontend/reference docs for shipped embedded-terminal behavior and record final progress/decisions in this plan. (status: not started)
@@ -54,6 +54,23 @@ Out of scope:
   - introduced `RuntimeTerminalHost`/`RuntimeTerminalHostId` and `openRuntimeTerminal(...)` to isolate terminal-launch strategy from `tuiCommand`
   - retained existing behavior by keeping `native-attach` as the sole active host in `hostOrder`
   - reserved explicit insertion point for embedded runtime host ahead of native attach without changing runtime stream/control contracts
+- M2 embedded host implementation complete:
+  - added `src/cli/common/runtime-terminal-embedded-host.ts` as an in-process terminal host using existing `RuntimeSessionManager` contracts
+  - embedded host lifecycle now explicitly wires:
+    - connection gate: `session.requireConnected(...)`
+    - focus: `session.focusWindow(windowId)`
+    - subscribe/bootstrap: `session.readWindowOutput(sessionName, windowName, cols, rows)` (triggers stream subscription path)
+    - resize: `session.sendResize(...)` at startup and on terminal `resize` events
+    - input: raw keypress translation to control bytes sent through `session.sendInput(windowId, Buffer)`
+    - render: frame updates from `session.registerFrameListener(...)` into alternate-screen terminal output
+  - integrated embedded host into seam by updating `src/cli/common/runtime-terminal-host.ts`:
+    - host order now prefers `embedded` then falls back to `native-attach`
+    - host launching is async to support in-process interactive lifetime
+  - updated `src/cli/commands/tui.ts` to pass `session` into `openRuntimeTerminal(...)` and await host launch result
+- M2 targeted checks:
+  - added host order/fallback tests: `tests/cli/common/runtime-terminal-host.test.ts`
+  - passed: `npx vitest run --configLoader runner tests/cli/common/runtime-terminal-host.test.ts tests/cli/commands/tui.test.ts`
+  - passed: `npm run -s typecheck`
 
 ## Key decisions
 
@@ -63,10 +80,12 @@ Out of scope:
 - Keep milestone slices small enough for one coding-loop iteration to preserve reviewability and rollback safety.
 - Freeze the embedding seam at the terminal-launch boundary (`tuiCommand` -> `openRuntimeTerminal`) instead of changing runtime protocol or daemon routes.
 - Keep `RuntimeSessionManager` as the compatibility boundary for stream/control operations so M2 can wire subscribe/input/resize/focus lifecycle without transport rewrites.
+- Make embedded host the preferred runtime terminal when running in a local TTY, with deterministic fallback to native attach when embedded launch is unavailable.
+- Keep embedded rendering as a contract-preserving adapter over `RuntimeSessionManager` instead of introducing new stream or control-plane message shapes.
 
 ## Remaining issues / open questions
 
-- Determine whether to share rendering helpers with `runtime-client-rs` or keep an embedded-only adapter while preserving module ownership boundaries.
+- Converge embedded rendering internals with documented Zellij-style ownership boundaries (M3), especially separating projection/serialization concerns from host IO concerns.
 - Validate whether any existing stream ordering assumptions in UI code need tightening for embedded rendering under rapid resize/input churn.
 
 ## Links to related documents
