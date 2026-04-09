@@ -100,6 +100,48 @@ function findLocalDevEntrypoint() {
   return candidates.find((file) => fs.existsSync(file)) || null;
 }
 
+function findLocalSourceEntrypoint() {
+  const scriptDir = __dirname;
+  const candidates = [
+    path.join(scriptDir, 'discode.ts'),
+    path.join(scriptDir, '..', 'bin', 'discode.ts'),
+    path.join(scriptDir, '..', '..', 'bin', 'discode.ts'),
+  ];
+  return candidates.find((file) => fs.existsSync(file)) || null;
+}
+
+function getFileMtimeMs(file) {
+  try {
+    return fs.statSync(file).mtimeMs;
+  } catch {
+    return 0;
+  }
+}
+
+function shouldPreferSourceEntrypoint(sourceEntrypoint, devEntrypoint) {
+  if (!sourceEntrypoint) return false;
+  if (!devEntrypoint) return true;
+  return getFileMtimeMs(sourceEntrypoint) > getFileMtimeMs(devEntrypoint);
+}
+
+function findLocalTsxCli() {
+  try {
+    const packageJsonPath = require.resolve('tsx/package.json');
+    const packageDir = path.dirname(packageJsonPath);
+    const cliPath = path.join(packageDir, 'dist', 'cli.mjs');
+    if (fs.existsSync(cliPath)) return cliPath;
+  } catch {
+    // Fall back to workspace-local paths.
+  }
+
+  const scriptDir = __dirname;
+  const candidates = [
+    path.join(scriptDir, '..', 'node_modules', 'tsx', 'dist', 'cli.mjs'),
+    path.join(scriptDir, '..', '..', 'node_modules', 'tsx', 'dist', 'cli.mjs'),
+  ];
+  return candidates.find((file) => fs.existsSync(file)) || null;
+}
+
 const explicitBinary = process.env.DISCODE_BIN_PATH;
 if (explicitBinary) {
   spawnAndExit(explicitBinary, process.argv.slice(2));
@@ -110,7 +152,15 @@ if (binary) {
   spawnAndExit(binary, process.argv.slice(2));
 }
 
+const sourceEntrypoint = findLocalSourceEntrypoint();
 const devEntrypoint = findLocalDevEntrypoint();
+if (shouldPreferSourceEntrypoint(sourceEntrypoint, devEntrypoint)) {
+  const tsxCli = findLocalTsxCli();
+  if (tsxCli) {
+    spawnAndExit(process.execPath, [tsxCli, sourceEntrypoint, ...process.argv.slice(2)]);
+  }
+}
+
 if (devEntrypoint) {
   spawnAndExit(process.execPath, [devEntrypoint, ...process.argv.slice(2)]);
 }

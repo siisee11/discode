@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
+import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
@@ -503,6 +503,62 @@ describe('CLI flow safety (stage 1)', () => {
 
       expect(mocks.spawnSync).toHaveBeenCalledWith(
         expect.stringContaining('discode-runtime-client'),
+        ['--socket', expect.any(String), '--window-id', 'agent-bridge:demo-claude', '--daemon-port', '18470'],
+        { stdio: 'inherit' },
+      );
+      expect(mocks.tuiCommand).not.toHaveBeenCalled();
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+      if (oldRepo === undefined) delete process.env.DISCODE_REPO;
+      else process.env.DISCODE_REPO = oldRepo;
+      if (oldNative === undefined) delete process.env.DISCODE_NATIVE_ATTACH;
+      else process.env.DISCODE_NATIVE_ATTACH = oldNative;
+      if (oldBin === undefined) delete process.env.DISCODE_RUNTIME_CLIENT_BIN;
+      else process.env.DISCODE_RUNTIME_CLIENT_BIN = oldBin;
+    }
+  });
+
+  it('attach (pty-rust): prefers the newest local runtime client build artifact', async () => {
+    const mod = await import('../bin/discode.ts');
+    const project = {
+      projectName: 'demo',
+      projectPath: '/work/demo',
+      runtimeSession: 'agent-bridge',
+      createdAt: new Date(),
+      lastActive: new Date(),
+      agents: { claude: true },
+      discordChannels: { claude: 'ch-1' },
+      instances: {
+        claude: { instanceId: 'claude', agentType: 'claude', runtimeWindow: 'demo-claude', channelId: 'ch-1' },
+      },
+    };
+    const oldRepo = process.env.DISCODE_REPO;
+    const oldNative = process.env.DISCODE_NATIVE_ATTACH;
+    const oldBin = process.env.DISCODE_RUNTIME_CLIENT_BIN;
+    const tempRoot = mkdtempSync(join(tmpdir(), 'discode-native-attach-freshness-'));
+    const binaryName = process.platform === 'win32' ? 'discode-runtime-client.exe' : 'discode-runtime-client';
+    const releasePath = join(tempRoot, 'runtime-client-rs', 'target', 'release', binaryName);
+    const debugPath = join(tempRoot, 'runtime-client-rs', 'target', 'debug', binaryName);
+
+    mkdirSync(join(releasePath, '..'), { recursive: true });
+    mkdirSync(join(debugPath, '..'), { recursive: true });
+    writeFileSync(releasePath, '#!/bin/sh\nexit 0\n');
+    writeFileSync(debugPath, '#!/bin/sh\nexit 0\n');
+    utimesSync(releasePath, new Date('2026-01-01T00:00:00Z'), new Date('2026-01-01T00:00:00Z'));
+    utimesSync(debugPath, new Date('2026-01-02T00:00:00Z'), new Date('2026-01-02T00:00:00Z'));
+
+    try {
+      process.env.DISCODE_REPO = tempRoot;
+      delete process.env.DISCODE_NATIVE_ATTACH;
+      delete process.env.DISCODE_RUNTIME_CLIENT_BIN;
+      mocks.config.runtimeMode = 'pty-rust';
+      mocks.stateManager.getProject.mockReturnValue(project);
+      mocks.spawnSync.mockReturnValueOnce({ status: 0, error: undefined });
+
+      await mod.attachCommand('demo', { instance: 'claude' });
+
+      expect(mocks.spawnSync).toHaveBeenCalledWith(
+        debugPath,
         ['--socket', expect.any(String), '--window-id', 'agent-bridge:demo-claude', '--daemon-port', '18470'],
         { stdio: 'inherit' },
       );

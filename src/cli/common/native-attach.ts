@@ -1,5 +1,5 @@
 import { spawnSync } from 'child_process';
-import { existsSync } from 'fs';
+import { existsSync, statSync } from 'fs';
 import { homedir } from 'os';
 import { resolve, join } from 'path';
 import { createRequire } from 'module';
@@ -32,6 +32,27 @@ function mapArchTag(arch: string): 'x64' | 'arm64' | null {
   return null;
 }
 
+function newestExistingPath(candidates: string[]): string | null {
+  let selected: string | null = null;
+  let newestMtime = -1;
+
+  for (const candidate of candidates) {
+    if (!existsSync(candidate)) continue;
+    let mtime = 0;
+    try {
+      mtime = statSync(candidate).mtimeMs;
+    } catch {
+      // Keep zero so stat failures do not win over readable files.
+    }
+    if (selected === null || mtime > newestMtime) {
+      selected = candidate;
+      newestMtime = mtime;
+    }
+  }
+
+  return selected;
+}
+
 export function resolveNativeAttachBinary(mode: NativeAttachMode): string | null {
   const explicit = process.env[NATIVE_ATTACH_BIN_ENV]?.trim();
   if (explicit) return explicit;
@@ -60,11 +81,12 @@ export function resolveNativeAttachBinary(mode: NativeAttachMode): string | null
   ].filter((value): value is string => !!value && value.length > 0);
   const repoHints = [...new Set(rawHints.map((value) => resolve(value)))];
 
-  const candidates = [
-    ...repoHints.map((root) => resolve(root, 'runtime-client-rs', 'target', 'release', binaryName)),
-    ...(platformTag && archTag
-      ? repoHints.map((root) =>
-        resolve(
+  for (const root of repoHints) {
+    const repoBuildCandidates = [
+      resolve(root, 'runtime-client-rs', 'target', 'debug', binaryName),
+      resolve(root, 'runtime-client-rs', 'target', 'release', binaryName),
+      ...(platformTag && archTag
+        ? [resolve(
           root,
           'dist',
           'release',
@@ -72,25 +94,31 @@ export function resolveNativeAttachBinary(mode: NativeAttachMode): string | null
           `discode-runtime-client-${platformTag}-${archTag}`,
           'bin',
           binaryName,
-        ))
-      : []),
-    ...(platformTag && archTag
-      ? repoHints.map((root) =>
-        resolve(
+        )]
+        : []),
+      ...(platformTag && archTag
+        ? [resolve(
           root,
           'node_modules',
           `@siisee11/discode-runtime-client-${platformTag}-${archTag}`,
           'bin',
           binaryName,
-        ))
-      : []),
+        )]
+        : []),
+    ];
+
+    const repoBinary = newestExistingPath(repoBuildCandidates);
+    if (repoBinary) return repoBinary;
+  }
+
+  const homeCandidates = [
     resolve(homedir(), '.discode', 'bin', binaryName),
     ...(platformTag && archTag
       ? [join(homedir(), '.discode', 'bin', 'runtime-client', `${platformTag}-${archTag}`, binaryName)]
       : []),
   ];
 
-  for (const candidate of candidates) {
+  for (const candidate of homeCandidates) {
     if (existsSync(candidate)) return candidate;
   }
 

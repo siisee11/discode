@@ -22,7 +22,8 @@ Use this when iterating on repository code.
 
 1. Install dependencies (`bun install`).
 2. Run the CLI from source (`bun run tsx bin/discode.ts onboard`, then `bun run tsx bin/discode.ts new`).
-3. For source-vs-release workflow details, use [`../../DEVELOPMENT.md`](../../DEVELOPMENT.md).
+3. If you launch via the repository wrapper (`./bin/discode`), it prefers source when `bin/discode.ts` is newer than checked-in `dist/bin/discode.js`; otherwise it uses the built `dist` entrypoint.
+4. For source-vs-release workflow details, use [`../../DEVELOPMENT.md`](../../DEVELOPMENT.md).
 
 ## Setup Routing
 
