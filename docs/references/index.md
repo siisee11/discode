@@ -9,7 +9,7 @@ Current reference set:
 - Canonical setup/bootstrap entrypoint: [`../operations/bootstrap.md`](../operations/bootstrap.md)
 - Codex app-server protocol: [`codex-app-server-llm.txt`](codex-app-server-llm.txt)
 - Setup guides: [`DISCORD_SETUP.md`](DISCORD_SETUP.md), [`SLACK_SETUP.md`](SLACK_SETUP.md)
-- Runtime contracts: [`RUNTIME_WINDOW_API.md`](RUNTIME_WINDOW_API.md), [`RUNTIME_NATIVE_CLIENT_CONTRACT.md`](RUNTIME_NATIVE_CLIENT_CONTRACT.md)
+- Runtime contracts: [`RUNTIME_WINDOW_API.md`](RUNTIME_WINDOW_API.md), [`RUNTIME_NATIVE_CLIENT_CONTRACT.md`](RUNTIME_NATIVE_CLIENT_CONTRACT.md) (shared embedded/native local terminal stream contract)
 - PTY runtime references: [`pty/index.md`](pty/index.md), [`PTY_RUST_ARCHITECTURE_CONTRACT.md`](PTY_RUST_ARCHITECTURE_CONTRACT.md)
 - Migration and compatibility references: [`DAEMON_RUST_MIGRATION.md`](DAEMON_RUST_MIGRATION.md)
 - Operational reference: [`release-npm.md`](release-npm.md)

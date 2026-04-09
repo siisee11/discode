@@ -9,6 +9,8 @@ vi.mock('../../src/state/instances.js', () => ({
   findProjectInstanceByChannel: vi.fn(),
   getPrimaryInstanceForAgent: vi.fn(),
   getProjectInstance: vi.fn(),
+  getInstanceRuntimeWindow: vi.fn((instance: any) => instance?.runtimeWindow),
+  getProjectRuntimeSession: vi.fn((project: any) => project?.runtimeSession),
   normalizeProjectState: vi.fn((p: any) => ({
     ...p,
     runtimeSession: p.runtimeSession || 'test-session',
@@ -279,7 +281,10 @@ describe('BridgeMessageRouter', () => {
     });
 
     await messageHandler('claude', 'hello', 'proj', 'ch-1', 'msg-1', undefined, undefined);
-    expect(deps.messaging.sendToChannel).toHaveBeenCalledWith('ch-1', expect.stringContaining('tmux window is not running'));
+    expect(deps.messaging.sendToChannel).toHaveBeenCalledWith(
+      'ch-1',
+      expect.stringContaining('agent runtime window is not running'),
+    );
     expect(deps.pendingTracker.markError).toHaveBeenCalled();
   });
 
