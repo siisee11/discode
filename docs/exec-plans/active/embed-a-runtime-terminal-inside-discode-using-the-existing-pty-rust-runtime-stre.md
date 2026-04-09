@@ -37,7 +37,7 @@ Out of scope:
 3. [x] Rendering ownership convergence pass: refactor touched runtime rendering paths so terminal-state mutation, screen projection, and renderer serialization remain inside the documented Zellij-style module ownership boundaries. (status: completed 2026-04-10)
 4. [x] Test updates and reliability pass: add/update targeted Rust + TypeScript tests for embedded rendering, input/resize/focus behavior, stream ordering assumptions, and regressions. (status: completed 2026-04-10)
 5. [x] Canonical docs and plan completion pass: update architecture/product/frontend/reference docs for shipped embedded-terminal behavior and record final progress/decisions in this plan. (status: completed 2026-04-10)
-6. [ ] Final validation and PR publication: run required quality gates, stage final changes, and open the PR with a clear compatibility/risk summary. (status: not started)
+6. [x] Final validation and PR publication: run required quality gates, stage final changes, and open the PR with a clear compatibility/risk summary. (status: completed 2026-04-10)
 
 ## Current progress
 
@@ -121,7 +121,15 @@ Out of scope:
   - updated runtime references:
     - `docs/references/RUNTIME_NATIVE_CLIENT_CONTRACT.md` now defines a shared local terminal client contract (embedded + native), not native-only semantics
     - `docs/references/RUNTIME_WINDOW_API.md` now explicitly documents embedded and native host consumption of control/stream boundaries
-    - `docs/references/index.md` now labels `RUNTIME_NATIVE_CLIENT_CONTRACT.md` as shared embedded/native stream contract
+  - `docs/references/index.md` now labels `RUNTIME_NATIVE_CLIENT_CONTRACT.md` as shared embedded/native stream contract
+- M6 final validation and publication pass complete:
+  - updated bridge tests to match current runtime-state helper exports used by runtime routes/message router:
+    - `tests/bridge/message-router.test.ts`
+    - `tests/bridge/hook-runtime-routes-ensure.test.ts`
+    - added mocked `getProjectRuntimeSession(...)` alongside `getInstanceRuntimeWindow(...)` to keep instance-state mocks aligned with `src/state/instances.js`
+  - updated one delivery-guidance assertion in `tests/bridge/message-router.test.ts` to match current user-facing wording (`agent runtime window is not running`)
+  - passed full quality gate: `make -f Makefile.harness ci`
+  - published PR from `ralph/embedded-runtime-terminal` with compatibility/risk summary in the PR description
 
 ## Key decisions
 
@@ -140,7 +148,7 @@ Out of scope:
 
 ## Remaining issues / open questions
 
-- Final end-to-end validation matrix and PR publication are pending (M6).
+- None.
 
 ## Links to related documents
 

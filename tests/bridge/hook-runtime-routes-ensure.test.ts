@@ -16,6 +16,8 @@ vi.mock('../../src/state/instances.js', () => ({
   normalizeProjectState: vi.fn((p: any) => p),
   getProjectInstance: vi.fn(),
   getPrimaryInstanceForAgent: vi.fn(),
+  getInstanceRuntimeWindow: vi.fn((instance: any) => instance?.runtimeWindow),
+  getProjectRuntimeSession: vi.fn((project: any) => project?.runtimeSession),
   listProjectInstances: vi.fn(() => []),
 }));
 
