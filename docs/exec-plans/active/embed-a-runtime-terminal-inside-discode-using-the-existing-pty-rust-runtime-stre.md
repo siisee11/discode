@@ -34,7 +34,7 @@ Out of scope:
 
 1. [x] Discovery and integration seam freeze: identify the exact discode runtime UI embedding surface and current stream/control call graph, then lock a compatibility-preserving implementation seam. (status: completed 2026-04-10)
 2. [x] Embedded terminal host implementation: wire runtime subscribe/focus/input/resize lifecycle into discode UI flow and render runtime frames inside discode using existing contracts. (status: completed 2026-04-10)
-3. [ ] Rendering ownership convergence pass: refactor touched runtime rendering paths so terminal-state mutation, screen projection, and renderer serialization remain inside the documented Zellij-style module ownership boundaries. (status: not started)
+3. [x] Rendering ownership convergence pass: refactor touched runtime rendering paths so terminal-state mutation, screen projection, and renderer serialization remain inside the documented Zellij-style module ownership boundaries. (status: completed 2026-04-10)
 4. [ ] Test updates and reliability pass: add/update targeted Rust + TypeScript tests for embedded rendering, input/resize/focus behavior, stream ordering assumptions, and regressions. (status: not started)
 5. [ ] Canonical docs and plan completion pass: update architecture/product/frontend/reference docs for shipped embedded-terminal behavior and record final progress/decisions in this plan. (status: not started)
 6. [ ] Final validation and PR publication: run required quality gates, stage final changes, and open the PR with a clear compatibility/risk summary. (status: not started)
@@ -49,7 +49,7 @@ Out of scope:
   - `tuiCommand` -> `RuntimeSessionManager.connect` (runtime stream `hello`)
   - `tuiCommand` -> `RuntimeSessionManager.fetchWindows` (`GET /runtime/windows`) -> startup window selection/focus decision
   - `tuiCommand` -> `RuntimeSessionManager.focusWindow` (stream `focus` + `POST /runtime/focus` for compatibility)
-  - `tuiCommand` -> `openRuntimeTerminal` (new seam) -> current host order contains `native-attach` only
+  - `tuiCommand` -> `openRuntimeTerminal` (new seam, introduced in M1 and expanded in later milestones)
 - M1 compatibility seam lock details:
   - introduced `RuntimeTerminalHost`/`RuntimeTerminalHostId` and `openRuntimeTerminal(...)` to isolate terminal-launch strategy from `tuiCommand`
   - retained existing behavior by keeping `native-attach` as the sole active host in `hostOrder`
@@ -71,6 +71,28 @@ Out of scope:
   - added host order/fallback tests: `tests/cli/common/runtime-terminal-host.test.ts`
   - passed: `npx vitest run --configLoader runner tests/cli/common/runtime-terminal-host.test.ts tests/cli/commands/tui.test.ts`
   - passed: `npm run -s typecheck`
+- M3 rendering ownership convergence complete:
+  - extracted embedded terminal screen projection ownership into `src/cli/common/runtime-terminal-screen.ts`
+    - owns screen-local state updates (`setPlainOutput`, `applyFrame`)
+    - owns viewport projection (`project(cols, rows)`) and row fitting logic
+  - extracted terminal serialization ownership into `src/cli/common/runtime-terminal-renderer.ts`
+    - owns alternate-screen enter/exit escape generation
+    - owns deterministic redraw serialization from projected rows (`renderProjection(...)`)
+  - slimmed `src/cli/common/runtime-terminal-embedded-host.ts` to host IO/lifecycle concerns only:
+    - stdin key capture -> runtime input send
+    - terminal resize events -> runtime resize send
+    - frame listener wiring -> `RuntimeTerminalScreen` updates -> renderer output write
+  - ownership mapping to Zellij-style contract for touched TS path:
+    - `RuntimeSessionManager` remains stream/control adapter and terminal-state mutation ingress boundary
+    - `runtime-terminal-screen` is the screen projection layer
+    - `runtime-terminal-renderer` is the renderer serialization layer
+    - embedded host now acts as transport/interaction shell and does not own screen formatting logic
+- M3 targeted checks:
+  - added screen/renderer unit coverage:
+    - `tests/cli/common/runtime-terminal-screen.test.ts`
+    - `tests/cli/common/runtime-terminal-renderer.test.ts`
+  - passed: `npx vitest run --configLoader runner tests/cli/common/runtime-terminal-renderer.test.ts tests/cli/common/runtime-terminal-screen.test.ts tests/cli/common/runtime-terminal-host.test.ts tests/cli/commands/tui.test.ts`
+  - passed: `npm run -s typecheck`
 
 ## Key decisions
 
@@ -82,11 +104,12 @@ Out of scope:
 - Keep `RuntimeSessionManager` as the compatibility boundary for stream/control operations so M2 can wire subscribe/input/resize/focus lifecycle without transport rewrites.
 - Make embedded host the preferred runtime terminal when running in a local TTY, with deterministic fallback to native attach when embedded launch is unavailable.
 - Keep embedded rendering as a contract-preserving adapter over `RuntimeSessionManager` instead of introducing new stream or control-plane message shapes.
+- Align touched TypeScript rendering ownership with Zellij-style layering by isolating screen projection and renderer serialization into dedicated modules used by the host shell.
 
 ## Remaining issues / open questions
 
-- Converge embedded rendering internals with documented Zellij-style ownership boundaries (M3), especially separating projection/serialization concerns from host IO concerns.
 - Validate whether any existing stream ordering assumptions in UI code need tightening for embedded rendering under rapid resize/input churn.
+- Decide whether reliability pass (M4) should include additional integration-style coverage for embedded host redraw cadence under rapid resize + frame churn.
 
 ## Links to related documents
 

@@ -1,5 +1,11 @@
 import { emitKeypressEvents } from 'readline';
 import type { RuntimeFrameEvent, RuntimeSessionManager } from './runtime-session-manager.js';
+import {
+  renderProjection,
+  renderTerminalEnterSequence,
+  renderTerminalExitSequence,
+} from './runtime-terminal-renderer.js';
+import { RuntimeTerminalScreen } from './runtime-terminal-screen.js';
 
 type EmbeddedRuntimeTerminalOptions = {
   session: RuntimeSessionManager;
@@ -10,14 +16,6 @@ type WindowParts = {
   sessionName: string;
   windowName: string;
 };
-
-const ENTER_ALT_SCREEN = '\x1b[?1049h';
-const LEAVE_ALT_SCREEN = '\x1b[?1049l';
-const HIDE_CURSOR = '\x1b[?25l';
-const SHOW_CURSOR = '\x1b[?25h';
-const CLEAR_SCREEN = '\x1b[2J';
-const MOVE_HOME = '\x1b[H';
-const CLEAR_LINE = '\x1b[2K';
 
 function parseWindowId(windowId: string): WindowParts | null {
   const idx = windowId.indexOf(':');
@@ -33,17 +31,6 @@ function terminalSize(): { cols: number; rows: number } {
     cols: Math.max(20, process.stdout.columns || 120),
     rows: Math.max(6, process.stdout.rows || 40),
   };
-}
-
-function trimToColumns(input: string, cols: number): string {
-  if (input.length <= cols) return input;
-  return input.slice(0, cols);
-}
-
-function statusLine(cols: number, text: string): string {
-  const content = trimToColumns(text, cols);
-  if (content.length >= cols) return content;
-  return `${content}${' '.repeat(cols - content.length)}`;
 }
 
 function keyToInputSequence(str: string, key: { name?: string; ctrl?: boolean; meta?: boolean } | undefined): string | undefined {
@@ -85,8 +72,7 @@ export async function openEmbeddedRuntimeTerminal(options: EmbeddedRuntimeTermin
 
   let closed = false;
   let renderQueued = false;
-  let currentLines: string[] = [];
-  const currentStatus = `embedded ${options.windowId} | ctrl+q exit`;
+  const screen = new RuntimeTerminalScreen(`embedded ${options.windowId} | ctrl+q exit`);
 
   const cleanup = new Set<() => void>();
 
@@ -102,23 +88,12 @@ export async function openEmbeddedRuntimeTerminal(options: EmbeddedRuntimeTermin
   const renderNow = () => {
     if (closed) return;
     const { cols, rows } = terminalSize();
-    const bodyRows = Math.max(1, rows - 1);
-    const visible = currentLines.slice(Math.max(0, currentLines.length - bodyRows));
-    const output: string[] = [MOVE_HOME];
-    for (let row = 0; row < bodyRows; row += 1) {
-      const line = visible[row] || '';
-      output.push(CLEAR_LINE);
-      output.push(trimToColumns(line, cols));
-      output.push('\n');
-    }
-    output.push(CLEAR_LINE);
-    output.push(statusLine(cols, currentStatus));
-    process.stdout.write(output.join(''));
+    process.stdout.write(renderProjection(screen.project(cols, rows)));
   };
 
   const setFrame = (event: RuntimeFrameEvent) => {
     if (event.sessionName !== sessionName || event.windowName !== windowName) return;
-    currentLines = event.output.length > 0 ? event.output.split('\n') : [];
+    screen.applyFrame(event);
     queueRender();
   };
 
@@ -129,7 +104,7 @@ export async function openEmbeddedRuntimeTerminal(options: EmbeddedRuntimeTermin
   };
 
   try {
-    process.stdout.write(`${ENTER_ALT_SCREEN}${HIDE_CURSOR}${CLEAR_SCREEN}${MOVE_HOME}`);
+    process.stdout.write(renderTerminalEnterSequence());
 
     emitKeypressEvents(stdin);
     stdin.setRawMode?.(true);
@@ -164,7 +139,7 @@ export async function openEmbeddedRuntimeTerminal(options: EmbeddedRuntimeTermin
     await session.sendResize(sessionName, windowName, cols, rows);
     const initial = await session.readWindowOutput(sessionName, windowName, cols, rows);
     if (typeof initial === 'string' && initial.length > 0) {
-      currentLines = initial.split('\n');
+      screen.setPlainOutput(initial);
     }
     renderNow();
 
@@ -184,6 +159,6 @@ export async function openEmbeddedRuntimeTerminal(options: EmbeddedRuntimeTermin
   } finally {
     for (const fn of cleanup) fn();
     stdin.setRawMode?.(hadRawMode);
-    process.stdout.write(`${SHOW_CURSOR}${LEAVE_ALT_SCREEN}`);
+    process.stdout.write(renderTerminalExitSequence());
   }
 }
