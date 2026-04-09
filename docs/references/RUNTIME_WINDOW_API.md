@@ -37,6 +37,11 @@ Supplementary operations used by control/stream planes:
 
 Both planes use the same window identity + adapter contract to keep behavior aligned.
 
+Local terminal hosts consume these boundaries without changing contracts:
+
+- embedded `discode tui` host (`src/cli/common/runtime-terminal-embedded-host.ts`) via `RuntimeSessionManager`
+- native fallback client (`runtime-client-rs`) via runtime stream socket + control plane
+
 ## 4) Serialization Versioning
 
 - Control responses include `protocolVersion`

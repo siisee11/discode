@@ -5,15 +5,19 @@ Status: Draft (implementation target)
 
 ## 1) Purpose
 
-Define the runtime contract for a native attach client replacing the TypeScript/OpenTUI primary attach path in `runtimeMode=pty-rust`.
-This contract introduces stream protocol version 2 while maintaining compatibility with existing version 1 clients.
+Define the runtime stream/control contract for local terminal clients in `runtimeMode=pty-rust`, including:
+
+- embedded `discode tui` runtime host
+- Rust native attach fallback client (`runtime-client-rs`)
+
+This contract uses stream protocol version 2 while maintaining compatibility with existing version 1 clients.
 
 ## 2) Scope
 
 In scope:
 
 - runtime stream protocol v2 handshake and message schema
-- native client lifecycle (connect, subscribe, input, resize, reconnect, exit)
+- local terminal client lifecycle (connect, subscribe, input, resize, reconnect, exit)
 - compatibility and rollout rules for v1/v2 coexistence
 
 Out of scope:
@@ -24,7 +28,9 @@ Out of scope:
 ## 3) Terminology
 
 - Runtime server: daemon runtime stream endpoint.
-- Native client: new Rust terminal attach client.
+- Local terminal client: embedded or native terminal consumer of runtime stream/control contracts.
+- Native client: Rust terminal attach fallback client.
+- Embedded host: `discode tui` in-process terminal host.
 - Window ID: canonical `<sessionName>:<windowName>`.
 - Active window: currently focused runtime window for direct input.
 
@@ -256,12 +262,12 @@ Server reconnect expectations:
 
 - v1 clients stay functional during migration.
 - Server continues to emit v1 payloads for v1 handshakes.
-- Native client uses v2.
+- Embedded and native local terminal clients use v2.
 - Removal of v1 support requires separate deprecation cycle and release note.
 
 ## 14) Acceptance Criteria
 
-- Native client can complete: connect -> subscribe -> render -> input -> resize -> reconnect.
+- Embedded and native local terminal clients can complete: connect -> subscribe -> render -> input -> resize -> reconnect.
 - Under stress (rapid input/resize), no unrecoverable desync.
 - Version mismatch handling is explicit and deterministic.
 - Contract tests cover message validation and ordering guarantees.

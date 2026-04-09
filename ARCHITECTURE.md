@@ -33,7 +33,8 @@ Responsibilities:
 
 - parse user commands
 - orchestrate onboarding, project lifecycle, daemon lifecycle, and config changes
-- attach local users to active sessions through the native Rust client
+- open local runtime sessions through an embedded terminal host in `discode tui`
+- fall back to the native Rust attach client when embedded host launch is unavailable
 
 ### Daemon orchestration
 
@@ -64,12 +65,13 @@ Responsibilities:
 
 - `src/runtime/**`
 - `src/tmux/**`
+- `src/cli/common/runtime-terminal-*.ts`
 - `sidecar/pty-rust/**`
 - `runtime-client-rs/**`
 
 Responsibilities:
 
-- manage the Rust PTY runtime, native attach client, and compatibility state
+- manage the Rust PTY runtime, embedded terminal host, native attach client fallback, and compatibility state
 - manage window lifecycle, input, resize, output buffering, and stream rendering
 - keep transport contracts stable across TypeScript and Rust implementations
 
@@ -132,6 +134,8 @@ Detailed module-boundary rules live in [`docs/MODULE_BOUNDARIES.md`](docs/MODULE
 - Rust daemon (`daemon-rs`) is the canonical daemon backend in the shipped startup path.
 - The shipped runtime is `pty-rust`; CLI/runtime mode parsing only accepts `pty-rust`.
 - The daemon exposes loopback HTTP endpoints for hooks and runtime control, plus a local stream socket for terminal frames.
+- Local runtime interaction in `discode tui` is embedded-first and uses existing stream/control contracts (`subscribe`, `focus`, `input`, `resize`) through `RuntimeSessionManager`.
+- Native attach (`runtime-client-rs`) remains a supported fallback path sharing the same runtime stream/control contracts.
 - Rust runtime stream/native attach transport is currently targeted at macOS/Linux; Windows named-pipe parity remains a tracked follow-up.
 - Rust components are first-class production components: PTY sidecar, native runtime client, and Rust daemon.
 

@@ -36,7 +36,7 @@ Out of scope:
 2. [x] Embedded terminal host implementation: wire runtime subscribe/focus/input/resize lifecycle into discode UI flow and render runtime frames inside discode using existing contracts. (status: completed 2026-04-10)
 3. [x] Rendering ownership convergence pass: refactor touched runtime rendering paths so terminal-state mutation, screen projection, and renderer serialization remain inside the documented Zellij-style module ownership boundaries. (status: completed 2026-04-10)
 4. [x] Test updates and reliability pass: add/update targeted Rust + TypeScript tests for embedded rendering, input/resize/focus behavior, stream ordering assumptions, and regressions. (status: completed 2026-04-10)
-5. [ ] Canonical docs and plan completion pass: update architecture/product/frontend/reference docs for shipped embedded-terminal behavior and record final progress/decisions in this plan. (status: not started)
+5. [x] Canonical docs and plan completion pass: update architecture/product/frontend/reference docs for shipped embedded-terminal behavior and record final progress/decisions in this plan. (status: completed 2026-04-10)
 6. [ ] Final validation and PR publication: run required quality gates, stage final changes, and open the PR with a clear compatibility/risk summary. (status: not started)
 
 ## Current progress
@@ -107,6 +107,21 @@ Out of scope:
   - passed: `npx vitest run --configLoader runner tests/cli/common/runtime-terminal-embedded-host.test.ts tests/cli/common/runtime-terminal-host.test.ts tests/cli/common/runtime-terminal-screen.test.ts tests/cli/common/runtime-terminal-renderer.test.ts tests/cli/commands/tui.test.ts`
   - passed: `cargo test --manifest-path daemon-rs/Cargo.toml runtime_stream::tests`
   - passed: `npm run -s typecheck`
+- M5 canonical docs completion:
+  - updated architecture map in `ARCHITECTURE.md`:
+    - `discode tui` is documented as embedded-terminal first
+    - native attach client documented as deterministic fallback
+    - runtime control map now includes embedded terminal host/screen/renderer modules
+  - updated frontend map in `docs/FRONTEND.md`:
+    - embedded host + screen + renderer listed as primary terminal UI surfaces
+    - native attach documented as fallback UI surface
+  - updated product maps/specs:
+    - `docs/PRODUCT_SENSE.md` now reflects embedded local runtime terminal with native fallback
+    - `docs/product-specs/runtime-attach-experience.md` now documents host selection, embedded lifecycle wiring (focus/input/resize/subscribe), and ownership split (`runtime-terminal-screen` + `runtime-terminal-renderer`)
+  - updated runtime references:
+    - `docs/references/RUNTIME_NATIVE_CLIENT_CONTRACT.md` now defines a shared local terminal client contract (embedded + native), not native-only semantics
+    - `docs/references/RUNTIME_WINDOW_API.md` now explicitly documents embedded and native host consumption of control/stream boundaries
+    - `docs/references/index.md` now labels `RUNTIME_NATIVE_CLIENT_CONTRACT.md` as shared embedded/native stream contract
 
 ## Key decisions
 
@@ -121,10 +136,10 @@ Out of scope:
 - Align touched TypeScript rendering ownership with Zellij-style layering by isolating screen projection and renderer serialization into dedicated modules used by the host shell.
 - Treat focus-triggered fresh frame emission as a required stream ordering invariant and keep it protected by daemon-rs unit coverage.
 - Treat embedded-host key mapping and resize/focus lifecycle wiring as regression-sensitive behavior with dedicated TypeScript tests.
+- Canonical product/architecture/reference docs should describe runtime behavior in host-selection terms (embedded-first with native fallback) while preserving unchanged stream/control contracts.
 
 ## Remaining issues / open questions
 
-- Canonical docs still need to be updated for shipped embedded-terminal-first behavior and ownership layering (M5).
 - Final end-to-end validation matrix and PR publication are pending (M6).
 
 ## Links to related documents
