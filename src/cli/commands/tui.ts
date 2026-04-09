@@ -3,9 +3,9 @@ import chalk from 'chalk';
 import { config } from '../../config/index.js';
 import type { TmuxCliOptions } from '../common/types.js';
 import { applyTmuxCliOverrides } from '../common/tmux.js';
-import { resolveNativeAttachMode, tryNativeAttach } from '../common/native-attach.js';
 import { RuntimeSessionManager } from '../common/runtime-session-manager.js';
 import { getDefaultRuntimeSocketPath } from '../common/runtime-stream-client.js';
+import { openRuntimeTerminal } from '../common/runtime-terminal-host.js';
 import {
   ensureDaemonRunning,
   getDaemonStatus,
@@ -138,8 +138,11 @@ export async function tuiCommand(options: TmuxCliOptions): Promise<void> {
       return;
     }
 
-    const nativeAttachMode = resolveNativeAttachMode();
-    if (tryNativeAttach(runtimeInitialWindow.windowId, nativeAttachMode, runtimePort)) {
+    const launchResult = openRuntimeTerminal({
+      windowId: runtimeInitialWindow.windowId,
+      runtimePort,
+    });
+    if (launchResult.launched) {
       return;
     }
 

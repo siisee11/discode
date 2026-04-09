@@ -32,7 +32,7 @@ Out of scope:
 
 ## Milestones
 
-1. [ ] Discovery and integration seam freeze: identify the exact discode runtime UI embedding surface and current stream/control call graph, then lock a compatibility-preserving implementation seam. (status: not started)
+1. [x] Discovery and integration seam freeze: identify the exact discode runtime UI embedding surface and current stream/control call graph, then lock a compatibility-preserving implementation seam. (status: completed 2026-04-10)
 2. [ ] Embedded terminal host implementation: wire runtime subscribe/focus/input/resize lifecycle into discode UI flow and render runtime frames inside discode using existing contracts. (status: not started)
 3. [ ] Rendering ownership convergence pass: refactor touched runtime rendering paths so terminal-state mutation, screen projection, and renderer serialization remain inside the documented Zellij-style module ownership boundaries. (status: not started)
 4. [ ] Test updates and reliability pass: add/update targeted Rust + TypeScript tests for embedded rendering, input/resize/focus behavior, stream ordering assumptions, and regressions. (status: not started)
@@ -43,7 +43,17 @@ Out of scope:
 
 - Reviewed required planning and architecture docs: `AGENTS.md`, `ARCHITECTURE.md`, `docs/PLANS.md`, and execution-plan conventions.
 - Reviewed runtime contract references relevant to this work (`RUNTIME_NATIVE_CLIENT_CONTRACT`, `PTY_RUST_ARCHITECTURE_CONTRACT`) and related completed plans.
-- Created this execution plan with milestones defined; all milestones remain not started.
+- M1 discovery complete: frozen the embedded-terminal integration seam at `src/cli/commands/tui.ts` by routing launch behavior through `src/cli/common/runtime-terminal-host.ts`.
+- M1 call graph captured for the current shipped path:
+  - `bin/discode.ts` (`tui` subcommand) -> `tuiCommand` (`src/cli/commands/tui.ts`)
+  - `tuiCommand` -> `RuntimeSessionManager.connect` (runtime stream `hello`)
+  - `tuiCommand` -> `RuntimeSessionManager.fetchWindows` (`GET /runtime/windows`) -> startup window selection/focus decision
+  - `tuiCommand` -> `RuntimeSessionManager.focusWindow` (stream `focus` + `POST /runtime/focus` for compatibility)
+  - `tuiCommand` -> `openRuntimeTerminal` (new seam) -> current host order contains `native-attach` only
+- M1 compatibility seam lock details:
+  - introduced `RuntimeTerminalHost`/`RuntimeTerminalHostId` and `openRuntimeTerminal(...)` to isolate terminal-launch strategy from `tuiCommand`
+  - retained existing behavior by keeping `native-attach` as the sole active host in `hostOrder`
+  - reserved explicit insertion point for embedded runtime host ahead of native attach without changing runtime stream/control contracts
 
 ## Key decisions
 
@@ -51,11 +61,12 @@ Out of scope:
 - Treat Zellij-style ownership boundaries from `PTY_RUST_ARCHITECTURE_CONTRACT` as the rendering architecture target for touched paths.
 - Require tests and canonical doc updates as part of definition-of-done, not as follow-up work.
 - Keep milestone slices small enough for one coding-loop iteration to preserve reviewability and rollback safety.
+- Freeze the embedding seam at the terminal-launch boundary (`tuiCommand` -> `openRuntimeTerminal`) instead of changing runtime protocol or daemon routes.
+- Keep `RuntimeSessionManager` as the compatibility boundary for stream/control operations so M2 can wire subscribe/input/resize/focus lifecycle without transport rewrites.
 
 ## Remaining issues / open questions
 
-- Confirm the primary embedded surface and ownership between discode TUI entrypoints and runtime-rendering components before implementation begins.
-- Determine whether shared rendering code should be extracted between embedded discode runtime UI and `runtime-client-rs`, or whether boundary-preserving adapter composition is lower risk.
+- Determine whether to share rendering helpers with `runtime-client-rs` or keep an embedded-only adapter while preserving module ownership boundaries.
 - Validate whether any existing stream ordering assumptions in UI code need tightening for embedded rendering under rapid resize/input churn.
 
 ## Links to related documents
