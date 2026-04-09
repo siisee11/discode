@@ -104,14 +104,14 @@ describe('stop command container cleanup', () => {
     const project: ProjectState = {
       projectName: 'test-project',
       projectPath: '/test/path',
-      tmuxSession: 'bridge',
+      runtimeSession: 'bridge',
       discordChannels: { claude: 'ch-1' },
       agents: { claude: true },
       instances: {
         claude: {
           instanceId: 'claude',
           agentType: 'claude',
-          tmuxWindow: 'test-claude',
+          runtimeWindow: 'test-claude',
           channelId: 'ch-1',
           containerMode: true,
           containerId: 'container-xyz',
@@ -139,14 +139,14 @@ describe('stop command container cleanup', () => {
     const project: ProjectState = {
       projectName: 'test-project',
       projectPath: '/test/path',
-      tmuxSession: 'bridge',
+      runtimeSession: 'bridge',
       discordChannels: { claude: 'ch-1' },
       agents: { claude: true },
       instances: {
         claude: {
           instanceId: 'claude',
           agentType: 'claude',
-          tmuxWindow: 'test-claude',
+          runtimeWindow: 'test-claude',
           channelId: 'ch-1',
           containerMode: true,
           containerId: 'container-aaa',
@@ -155,7 +155,7 @@ describe('stop command container cleanup', () => {
         'claude-2': {
           instanceId: 'claude-2',
           agentType: 'claude',
-          tmuxWindow: 'test-claude-2',
+          runtimeWindow: 'test-claude-2',
           channelId: 'ch-2',
           containerMode: true,
           containerId: 'container-bbb',
@@ -180,14 +180,14 @@ describe('stop command container cleanup', () => {
     const project: ProjectState = {
       projectName: 'test-project',
       projectPath: '/test/path',
-      tmuxSession: 'bridge',
+      runtimeSession: 'bridge',
       discordChannels: { claude: 'ch-1' },
       agents: { claude: true },
       instances: {
         claude: {
           instanceId: 'claude',
           agentType: 'claude',
-          tmuxWindow: 'test-claude',
+          runtimeWindow: 'test-claude',
           channelId: 'ch-1',
           // No containerMode
         },

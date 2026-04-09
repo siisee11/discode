@@ -5,6 +5,8 @@ import {
   findProjectInstanceByChannel,
   getPrimaryInstanceForAgent,
   getProjectInstance,
+  getProjectRuntimeSession,
+  getInstanceRuntimeWindow,
   normalizeProjectState,
 } from '../state/instances.js';
 import { PendingMessageTracker } from './pending-message-tracker.js';
@@ -73,9 +75,14 @@ export class BridgeMessageRouter {
 
       const resolvedAgentType = mappedInstance.agentType;
       const instanceKey = mappedInstance.instanceId;
-      const windowName = mappedInstance.tmuxWindow || instanceKey;
+      const windowName = getInstanceRuntimeWindow(mappedInstance) || instanceKey;
+      const runtimeSession = getProjectRuntimeSession(normalizedProject);
+      if (!runtimeSession) {
+        await messaging.sendToChannel(channelId, '⚠️ Project runtime session not found. Try restarting the project.');
+        return;
+      }
 
-      // Cancel command — abort SDK runner or send ESC to tmux
+      // Cancel command — abort SDK runner or send ESC to the runtime window
       if (content.trim().toLowerCase() === 'cancel') {
         if (mappedInstance.runtimeType === 'sdk') {
           const runner = this.deps.getSdkRunner?.(projectName, instanceKey);
@@ -83,7 +90,7 @@ export class BridgeMessageRouter {
             runner.abort();
           }
         } else {
-          this.deps.runtime.sendEscapeToWindow?.(normalizedProject.tmuxSession, windowName, resolvedAgentType);
+          this.deps.runtime.sendEscapeToWindow?.(runtimeSession, windowName, resolvedAgentType);
         }
         await messaging.sendToChannel(channelId, '⏹️ Cancel signal sent');
         return;
@@ -158,13 +165,13 @@ export class BridgeMessageRouter {
         try {
           if (isEnterOnly) {
             // Enter-only: just press Enter (e.g. "Submit answers" confirmation)
-            this.deps.runtime.sendEnterToWindow(normalizedProject.tmuxSession, windowName, resolvedAgentType);
+            this.deps.runtime.sendEnterToWindow(runtimeSession, windowName, resolvedAgentType);
           } else if (isButtonAnswer) {
             // Button answers contain arrow key escape sequences.
             // Send each arrow individually with delay so Ink processes them one at a time.
-            await this.submitArrowKeys(normalizedProject.tmuxSession, windowName, sanitized!, resolvedAgentType);
+            await this.submitArrowKeys(runtimeSession, windowName, sanitized!, resolvedAgentType);
           } else {
-            await this.submitToAgent(normalizedProject.tmuxSession, windowName, sanitized!, resolvedAgentType);
+            await this.submitToAgent(runtimeSession, windowName, sanitized!, resolvedAgentType);
           }
           // Skip fallback for button answers — they're part of an interactive
           // question flow and shouldn't trigger buffer-based response detection.
@@ -172,7 +179,7 @@ export class BridgeMessageRouter {
             scheduleBufferFallback(
               { messaging: this.deps.messaging, runtime: this.deps.runtime, pendingTracker: this.deps.pendingTracker },
               this.fallbackTimers,
-              normalizedProject.tmuxSession,
+              runtimeSession,
               windowName,
               projectName,
               resolvedAgentType,
@@ -206,13 +213,13 @@ export class BridgeMessageRouter {
   }
 
   private async submitToAgent(
-    tmuxSession: string,
+    runtimeSession: string,
     windowName: string,
     prompt: string,
     agentType: string,
   ): Promise<void> {
-    console.log(`⌨️ [submit] typing ${prompt.length} chars to ${tmuxSession}:${windowName} (${agentType})`);
-    this.deps.runtime.typeKeysToWindow(tmuxSession, windowName, prompt.trimEnd(), agentType);
+    console.log(`⌨️ [submit] typing ${prompt.length} chars to ${runtimeSession}:${windowName} (${agentType})`);
+    this.deps.runtime.typeKeysToWindow(runtimeSession, windowName, prompt.trimEnd(), agentType);
     const envKey =
       agentType === 'opencode'
         ? 'DISCODE_OPENCODE_SUBMIT_DELAY_MS'
@@ -220,7 +227,7 @@ export class BridgeMessageRouter {
     const defaultMs = agentType === 'opencode' ? 75 : 300;
     const delayMs = this.getEnvInt(envKey, defaultMs);
     await this.sleep(delayMs);
-    this.deps.runtime.sendEnterToWindow(tmuxSession, windowName, agentType);
+    this.deps.runtime.sendEnterToWindow(runtimeSession, windowName, agentType);
   }
 
   /**
@@ -229,20 +236,20 @@ export class BridgeMessageRouter {
    * write, so we must send them individually.
    */
   private async submitArrowKeys(
-    tmuxSession: string,
+    runtimeSession: string,
     windowName: string,
     keys: string,
     agentType: string,
   ): Promise<void> {
     // Split into individual escape sequences (\x1b[B, \x1b[A, etc.)
     const escapes = keys.match(/\x1b\[[A-D]/g) || [];
-    console.log(`⌨️ [arrow] sending ${escapes.length} arrow keys to ${tmuxSession}:${windowName} (${agentType})`);
+    console.log(`⌨️ [arrow] sending ${escapes.length} arrow keys to ${runtimeSession}:${windowName} (${agentType})`);
     for (const esc of escapes) {
-      this.deps.runtime.typeKeysToWindow(tmuxSession, windowName, esc, agentType);
+      this.deps.runtime.typeKeysToWindow(runtimeSession, windowName, esc, agentType);
       await this.sleep(100);
     }
     await this.sleep(150);
-    this.deps.runtime.sendEnterToWindow(tmuxSession, windowName, agentType);
+    this.deps.runtime.sendEnterToWindow(runtimeSession, windowName, agentType);
   }
 
 
@@ -252,7 +259,7 @@ export class BridgeMessageRouter {
 
     if (missingTarget) {
       return (
-        `⚠️ I couldn't deliver your message because the agent tmux window is not running.\n` +
+        `⚠️ I couldn't deliver your message because the agent runtime window is not running.\n` +
         `Please restart the agent session, then send your message again:\n` +
         `1) \`discode new --name ${projectName}\`\n` +
         `2) \`discode attach ${projectName}\``
@@ -260,7 +267,7 @@ export class BridgeMessageRouter {
     }
 
     return (
-      `⚠️ I couldn't deliver your message to the tmux agent session.\n` +
+      `⚠️ I couldn't deliver your message to the agent runtime session.\n` +
       `Please confirm the agent is running, then try again.\n` +
       `If needed, restart with \`discode new --name ${projectName}\`.`
     );

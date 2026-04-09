@@ -2,6 +2,9 @@ import type { BridgeConfig, ProjectState } from '../types/index.js';
 import {
   getPrimaryInstanceForAgent,
   getProjectInstance,
+  getProjectRuntimeSession,
+  getProjectRuntimeWindows,
+  getInstanceRuntimeWindow,
   normalizeProjectState,
 } from '../state/instances.js';
 
@@ -29,14 +32,16 @@ export function resolveProjectWindowName(
   instanceId?: string,
 ): string {
   const normalized = normalizeProjectState(project);
+  const explicitInstance = instanceId ? getProjectInstance(normalized, instanceId) : undefined;
+  const primaryInstance = getPrimaryInstanceForAgent(normalized, agentName);
   const mapped =
-    (instanceId ? getProjectInstance(normalized, instanceId)?.tmuxWindow : undefined) ||
-    getPrimaryInstanceForAgent(normalized, agentName)?.tmuxWindow ||
-    project.tmuxWindows?.[agentName];
+    getInstanceRuntimeWindow(explicitInstance) ||
+    getInstanceRuntimeWindow(primaryInstance) ||
+    getProjectRuntimeWindows(project)?.[agentName];
   if (mapped && mapped.length > 0) return mapped;
 
   const sharedSession = `${tmuxConfig.sessionPrefix}${tmuxConfig.sharedSessionName || 'bridge'}`;
-  if (project.tmuxSession === sharedSession) {
+  if (getProjectRuntimeSession(project) === sharedSession) {
     const token = instanceId || agentName;
     return toSharedWindowName(project.projectName, token);
   }

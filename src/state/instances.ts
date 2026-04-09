@@ -4,8 +4,24 @@ function sortInstances(a: ProjectInstanceState, b: ProjectInstanceState): number
   return a.instanceId.localeCompare(b.instanceId);
 }
 
+export function getProjectRuntimeSession(project: ProjectState): string | undefined {
+  const runtimeSession = typeof project.runtimeSession === 'string' ? project.runtimeSession.trim() : '';
+  return runtimeSession || undefined;
+}
+
+export function getProjectRuntimeWindows(project: ProjectState): Record<string, string | undefined> | undefined {
+  return project.runtimeWindows;
+}
+
+export function getInstanceRuntimeWindow(instance: ProjectInstanceState | undefined): string | undefined {
+  if (!instance) return undefined;
+  const runtimeWindow = typeof instance.runtimeWindow === 'string' ? instance.runtimeWindow.trim() : '';
+  return runtimeWindow || undefined;
+}
+
 function normalizeLegacyInstances(project: ProjectState): Record<string, ProjectInstanceState> {
   const keys = new Set<string>();
+  const runtimeWindows = getProjectRuntimeWindows(project) || {};
 
   for (const [agentType, enabled] of Object.entries(project.agents || {})) {
     if (enabled) keys.add(agentType);
@@ -14,7 +30,7 @@ function normalizeLegacyInstances(project: ProjectState): Record<string, Project
     if (project.agents?.[agentType] === false) continue;
     keys.add(agentType);
   }
-  for (const agentType of Object.keys(project.tmuxWindows || {})) {
+  for (const agentType of Object.keys(runtimeWindows)) {
     if (project.agents?.[agentType] === false) continue;
     keys.add(agentType);
   }
@@ -26,10 +42,11 @@ function normalizeLegacyInstances(project: ProjectState): Record<string, Project
   const instances: Record<string, ProjectInstanceState> = {};
   for (const agentType of keys) {
     if (!agentType || agentType.trim().length === 0) continue;
+    const runtimeWindow = runtimeWindows[agentType];
     instances[agentType] = {
       instanceId: agentType,
       agentType,
-      tmuxWindow: project.tmuxWindows?.[agentType],
+      ...(runtimeWindow ? { runtimeWindow } : {}),
       channelId: project.discordChannels?.[agentType],
       eventHook: project.eventHooks?.[agentType],
     };
@@ -54,27 +71,33 @@ function normalizeInstanceMap(project: ProjectState): Record<string, ProjectInst
     const agentType = typeof rawValue.agentType === 'string' ? rawValue.agentType.trim() : '';
     if (!agentType) continue;
 
-    // Support both the current field name (`channelId`) and the legacy
-    // field name (`discordChannelId`) for backward compatibility with
-    // state files saved before the rename.
     const raw = rawValue as unknown as Record<string, unknown>;
-    const rawChannelId = raw.channelId ?? raw.discordChannelId;
+    const rawChannelId = raw.channelId;
     const channelId = typeof rawChannelId === 'string' && rawChannelId.trim().length > 0
       ? rawChannelId
       : undefined;
+    const rawRuntimeWindow = raw.runtimeWindow;
+    const runtimeWindow = typeof rawRuntimeWindow === 'string' && rawRuntimeWindow.trim().length > 0
+      ? rawRuntimeWindow
+      : undefined;
+    const rawRuntimeType = raw.runtimeType;
+    const runtimeType =
+      rawRuntimeType === 'sdk'
+        ? 'sdk'
+        : rawRuntimeType === 'pty-rust'
+          ? 'pty-rust'
+          : undefined;
 
     normalized[instanceId] = {
       instanceId,
       agentType,
-      tmuxWindow: typeof rawValue.tmuxWindow === 'string' && rawValue.tmuxWindow.trim().length > 0
-        ? rawValue.tmuxWindow
-        : undefined,
+      ...(runtimeWindow ? { runtimeWindow } : {}),
       channelId: channelId,
       eventHook: typeof rawValue.eventHook === 'boolean' ? rawValue.eventHook : undefined,
       ...(rawValue.containerMode ? { containerMode: true } : {}),
       ...(typeof rawValue.containerId === 'string' ? { containerId: rawValue.containerId } : {}),
       ...(typeof rawValue.containerName === 'string' ? { containerName: rawValue.containerName } : {}),
-      ...(rawValue.runtimeType === 'sdk' || rawValue.runtimeType === 'tmux' ? { runtimeType: rawValue.runtimeType } : {}),
+      ...(runtimeType ? { runtimeType } : {}),
       ...(typeof rawValue.sdkSessionId === 'string' ? { sdkSessionId: rawValue.sdkSessionId } : {}),
     };
   }
@@ -83,22 +106,23 @@ function normalizeInstanceMap(project: ProjectState): Record<string, ProjectInst
   return normalizeLegacyInstances(project);
 }
 
-function deriveLegacyMaps(instances: Record<string, ProjectInstanceState>): Pick<ProjectState, 'agents' | 'discordChannels' | 'tmuxWindows' | 'eventHooks'> {
+function deriveLegacyMaps(instances: Record<string, ProjectInstanceState>): Pick<ProjectState, 'agents' | 'discordChannels' | 'runtimeWindows' | 'eventHooks'> {
   const sorted = Object.values(instances).sort(sortInstances);
 
   const agents: ProjectState['agents'] = {};
   const discordChannels: ProjectState['discordChannels'] = {};
-  const tmuxWindows: NonNullable<ProjectState['tmuxWindows']> = {};
+  const runtimeWindows: NonNullable<NonNullable<ProjectState['runtimeWindows']>> = {};
   const eventHooks: NonNullable<ProjectState['eventHooks']> = {};
 
   for (const instance of sorted) {
     agents[instance.agentType] = true;
+    const runtimeWindow = getInstanceRuntimeWindow(instance);
 
     if (instance.channelId && discordChannels[instance.agentType] === undefined) {
       discordChannels[instance.agentType] = instance.channelId;
     }
-    if (instance.tmuxWindow && tmuxWindows[instance.agentType] === undefined) {
-      tmuxWindows[instance.agentType] = instance.tmuxWindow;
+    if (runtimeWindow && runtimeWindows[instance.agentType] === undefined) {
+      runtimeWindows[instance.agentType] = runtimeWindow;
     }
     if (typeof instance.eventHook === 'boolean' && eventHooks[instance.agentType] === undefined) {
       eventHooks[instance.agentType] = instance.eventHook;
@@ -108,7 +132,7 @@ function deriveLegacyMaps(instances: Record<string, ProjectInstanceState>): Pick
   return {
     agents,
     discordChannels,
-    tmuxWindows: Object.keys(tmuxWindows).length > 0 ? tmuxWindows : undefined,
+    runtimeWindows: Object.keys(runtimeWindows).length > 0 ? runtimeWindows : undefined,
     eventHooks: Object.keys(eventHooks).length > 0 ? eventHooks : undefined,
   };
 }
@@ -116,14 +140,44 @@ function deriveLegacyMaps(instances: Record<string, ProjectInstanceState>): Pick
 export function normalizeProjectState(project: ProjectState): ProjectState {
   const instances = normalizeInstanceMap(project);
   const legacy = deriveLegacyMaps(instances);
+  const runtimeSession = getProjectRuntimeSession(project);
 
   return {
     ...project,
+    ...(runtimeSession ? { runtimeSession } : {}),
     instances,
     agents: legacy.agents,
     discordChannels: legacy.discordChannels,
-    tmuxWindows: legacy.tmuxWindows,
+    runtimeWindows: legacy.runtimeWindows,
     eventHooks: legacy.eventHooks,
+  };
+}
+
+export function serializeProjectState(project: ProjectState): ProjectState {
+  const normalized = normalizeProjectState(project);
+  const projectRest = { ...normalized };
+
+  const serializedInstances = Object.fromEntries(
+    Object.entries(normalized.instances || {}).flatMap(([instanceId, instance]) => {
+      if (!instance) return [];
+      const instanceRest = { ...instance };
+      const runtimeWindow = getInstanceRuntimeWindow(instance);
+      const runtimeType = instance.runtimeType;
+      return [[
+        instanceId,
+        {
+          ...instanceRest,
+          ...(runtimeWindow ? { runtimeWindow } : {}),
+          ...(runtimeType ? { runtimeType } : {}),
+        },
+      ]];
+    }),
+  );
+
+  return {
+    ...projectRest,
+    instances: serializedInstances,
+    runtimeWindows: normalized.runtimeWindows,
   };
 }
 

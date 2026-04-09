@@ -42,7 +42,7 @@ interface SetupParams {
   projectName: string;
   projectPath: string;
   instanceId: string;
-  tmuxSession: string;
+  runtimeSession: string;
   windowName: string;
   port: number;
   permissionAllow: boolean;
@@ -59,7 +59,7 @@ export async function setupProject(
   channelDisplayName?: string,
   overridePort?: number,
   options?: { instanceId?: string; skipRuntimeStart?: boolean },
-): Promise<{ channelName: string; channelId: string; agentName: string; tmuxSession: string }> {
+): Promise<{ channelName: string; channelId: string; agentName: string; runtimeSession: string }> {
   const isSlack = deps.bridgeConfig.messagingPlatform === 'slack';
   const guildId = isSlack ? deps.stateManager.getWorkspaceId() : deps.stateManager.getGuildId();
   if (!guildId) {
@@ -83,7 +83,7 @@ export async function setupProject(
 
   const sharedSessionName = deps.bridgeConfig.tmux.sharedSessionName || 'bridge';
   const windowName = toProjectScopedName(projectName, adapter.config.name, instanceId);
-  const tmuxSession = deps.runtime.getOrCreateSession(sharedSessionName, windowName);
+  const runtimeSession = deps.runtime.getOrCreateSession(sharedSessionName, windowName);
 
   const channelName = channelDisplayName || toProjectScopedName(projectName, adapter.config.channelSuffix, instanceId);
   const channels = await deps.messaging.createAgentChannels(
@@ -96,7 +96,7 @@ export async function setupProject(
 
   const channelId = channels[adapter.config.name];
   const port = overridePort || deps.bridgeConfig.hookServerPort || 18470;
-  deps.runtime.setSessionEnv(tmuxSession, 'DISCODE_PORT', String(port));
+  deps.runtime.setSessionEnv(runtimeSession, 'DISCODE_PORT', String(port));
 
   const permissionAllow = deps.bridgeConfig.opencode?.permissionMode === 'allow';
   const integration = installAgentIntegration(adapter.config.name, projectPath, 'install');
@@ -120,7 +120,7 @@ export async function setupProject(
     projectName,
     projectPath,
     instanceId,
-    tmuxSession,
+    runtimeSession,
     windowName,
     port,
     permissionAllow,
@@ -145,7 +145,7 @@ export async function setupProject(
     normalizedExisting,
     projectName,
     projectPath,
-    tmuxSession,
+    runtimeSession,
     instanceId,
     agentName: adapter.config.name,
     windowName,
@@ -160,7 +160,7 @@ export async function setupProject(
     channelName,
     channelId,
     agentName: adapter.config.displayName,
-    tmuxSession,
+    runtimeSession,
   };
 }
 
@@ -220,7 +220,7 @@ function setupContainerInstance(
 
   const dockerStartCmd = buildDockerStartCommand(containerId, socketPath);
   if (!p.skipRuntimeStart) {
-    deps.runtime.startAgentInWindow(p.tmuxSession, p.windowName, dockerStartCmd);
+    deps.runtime.startAgentInWindow(p.runtimeSession, p.windowName, dockerStartCmd);
   }
 
   const sync = new ContainerSync({
@@ -253,7 +253,7 @@ function setupStandardInstance(deps: ProjectSetupDeps, p: SetupParams): void {
   );
 
   if (!p.skipRuntimeStart) {
-    deps.runtime.startAgentInWindow(p.tmuxSession, p.windowName, `${exportPrefix}${startCommand}`);
+    deps.runtime.startAgentInWindow(p.runtimeSession, p.windowName, `${exportPrefix}${startCommand}`);
   }
 }
 
@@ -263,7 +263,7 @@ function saveProjectState(
     normalizedExisting: ReturnType<typeof normalizeProjectState> | undefined;
     projectName: string;
     projectPath: string;
-    tmuxSession: string;
+    runtimeSession: string;
     instanceId: string;
     agentName: string;
     windowName: string;
@@ -277,7 +277,7 @@ function saveProjectState(
   const baseProject = p.normalizedExisting || {
     projectName: p.projectName,
     projectPath: p.projectPath,
-    tmuxSession: p.tmuxSession,
+    runtimeSession: p.runtimeSession,
     createdAt: new Date(),
     lastActive: new Date(),
     agents: {},
@@ -289,7 +289,7 @@ function saveProjectState(
     [p.instanceId]: {
       instanceId: p.instanceId,
       agentType: p.agentName,
-      tmuxWindow: p.windowName,
+      runtimeWindow: p.windowName,
       channelId: p.channelId,
       eventHook: p.agentName === 'opencode' || p.eventHookInstalled,
       ...(p.containerMode ? { containerMode: true, containerId: p.containerId, containerName: p.containerName } : {}),
@@ -299,7 +299,7 @@ function saveProjectState(
     ...baseProject,
     projectName: p.projectName,
     projectPath: p.projectPath,
-    tmuxSession: p.tmuxSession,
+    runtimeSession: p.runtimeSession,
     instances: nextInstances,
     lastActive: new Date(),
   });

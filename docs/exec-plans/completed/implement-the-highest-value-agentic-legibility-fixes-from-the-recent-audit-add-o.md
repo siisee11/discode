@@ -55,7 +55,7 @@ This plan sequences those fixes so future coding loops have a single startup pat
   - tightened root `AGENTS.md` without converting it into a manual
   - expanded the doc-tree map to include `docs/operations/` and `bootstrap.md`
   - added `Start Here` routing for the canonical setup/bootstrap entrypoint
-  - added a dedicated `Primary Command/Task Surfaces` section indexing `bin/discode.ts`, `bin/tui.tsx`, `Makefile.harness`, and `package.json`
+  - added a dedicated `Primary Command/Task Surfaces` section indexing `bin/discode.ts`, `runtime-client-rs/src/main.rs`, `Makefile.harness`, and `package.json`
   - lightweight check run: verified new `AGENTS.md` link targets exist on disk (`agents-link-target-existence: ok`)
 - Milestone 4 completed on 2026-03-15:
   - added ADR location/index at `docs/decisions/index.md`

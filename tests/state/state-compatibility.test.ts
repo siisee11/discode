@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'fs';
 import { StateManager } from '../../src/state/index.js';
 import type { IStorage } from '../../src/types/interfaces.js';
 import type { ProjectState } from '../../src/types/index.js';
@@ -41,20 +40,29 @@ class MockStorage implements IStorage {
   }
 }
 
-function loadCompatFixture(name: string): unknown {
-  const path = new URL(`../fixtures/compat/${name}`, import.meta.url);
-  return JSON.parse(readFileSync(path, 'utf-8'));
-}
-
-describe('StateManager compatibility', () => {
+describe('StateManager state persistence', () => {
   const stateDir = '/test/state';
   const stateFile = '/test/state/state.json';
 
-  it('normalizes legacy project maps into instances on load', () => {
+  it('normalizes runtime project maps into instances on load', () => {
     const storage = new MockStorage();
     storage.setFile(
       stateFile,
-      JSON.stringify(loadCompatFixture('state-legacy-maps.json')),
+      JSON.stringify({
+        projects: {
+          demo: {
+            projectName: 'demo',
+            projectPath: '/tmp/demo',
+            runtimeSession: 'agent-demo',
+            agents: { claude: true },
+            discordChannels: { claude: 'ch-1' },
+            runtimeWindows: { claude: 'demo-claude' },
+            eventHooks: { claude: true },
+            createdAt: new Date('2026-03-01T00:00:00.000Z'),
+            lastActive: new Date('2026-03-01T00:00:00.000Z'),
+          },
+        },
+      }),
     );
 
     const manager = new StateManager(storage, stateDir, stateFile);
@@ -64,30 +72,46 @@ describe('StateManager compatibility', () => {
       instanceId: 'claude',
       agentType: 'claude',
       channelId: 'ch-1',
-      tmuxWindow: 'demo-claude',
+      runtimeWindow: 'demo-claude',
       eventHook: true,
     }));
   });
 
-  it('maps legacy instances.discordChannelId to channelId', () => {
+  it('preserves unknown fields and normalizes current multi-instance fixture', () => {
     const storage = new MockStorage();
     storage.setFile(
       stateFile,
-      JSON.stringify(loadCompatFixture('state-legacy-discord-channel-alias.json')),
-    );
-
-    const manager = new StateManager(storage, stateDir, stateFile);
-    const project = manager.getProject('demo');
-
-    expect(project?.instances?.claude?.channelId).toBe('legacy-ch-1');
-    expect(project?.discordChannels?.claude).toBe('legacy-ch-1');
-  });
-
-  it('preserves unknown fields and normalizes mixed multi-instance fixture', () => {
-    const storage = new MockStorage();
-    storage.setFile(
-      stateFile,
-      JSON.stringify(loadCompatFixture('state-multi-instance-roundtrip.json')),
+      JSON.stringify({
+        projects: {
+          demo: {
+            projectName: 'demo',
+            projectPath: '/tmp/demo',
+            runtimeSession: 'agent-demo',
+            agents: { opencode: true, claude: true },
+            discordChannels: { opencode: 'ch-opencode', claude: 'legacy-ch-claude' },
+            runtimeWindows: { opencode: 'demo-opencode', claude: 'demo-claude' },
+            customProject: { value: 1 },
+            instances: {
+              opencode: {
+                instanceId: 'opencode',
+                agentType: 'opencode',
+                runtimeWindow: 'demo-opencode',
+                channelId: 'ch-opencode',
+                eventHook: true,
+              },
+              claude: {
+                instanceId: 'claude',
+                agentType: 'claude',
+                runtimeWindow: 'demo-claude',
+                channelId: 'legacy-ch-claude',
+                eventHook: false,
+              },
+            },
+            createdAt: new Date('2026-03-01T00:00:00.000Z'),
+            lastActive: new Date('2026-03-01T00:00:00.000Z'),
+          },
+        },
+      }),
     );
 
     const manager = new StateManager(storage, stateDir, stateFile);
@@ -105,14 +129,14 @@ describe('StateManager compatibility', () => {
     const project: ProjectState = {
       projectName: 'demo',
       projectPath: '/tmp/demo',
-      tmuxSession: 'agent-demo',
+      runtimeSession: 'agent-demo',
       agents: {},
       discordChannels: {},
       instances: {
         'claude-2': {
           instanceId: 'claude-2',
           agentType: 'claude',
-          tmuxWindow: 'demo-claude-2',
+          runtimeWindow: 'demo-claude-2',
           channelId: 'ch-2',
           eventHook: true,
         },
@@ -129,9 +153,11 @@ describe('StateManager compatibility', () => {
     const savedProject = savedState.projects.demo;
 
     expect(savedProject.instances['claude-2'].channelId).toBe('ch-2');
+    expect(savedProject.instances['claude-2'].runtimeWindow).toBe('demo-claude-2');
     expect(savedProject.agents.claude).toBe(true);
     expect(savedProject.discordChannels.claude).toBe('ch-2');
-    expect(savedProject.tmuxWindows.claude).toBe('demo-claude-2');
+    expect(savedProject.runtimeSession).toBe('agent-demo');
+    expect(savedProject.runtimeWindows.claude).toBe('demo-claude-2');
     expect(savedProject.eventHooks.claude).toBe(true);
   });
 });

@@ -66,14 +66,14 @@ describe('container agent → platform send', () => {
     return {
       projectName: 'test-project',
       projectPath: tempDir,
-      tmuxSession: 'bridge',
+      runtimeSession: 'bridge',
       agents: { claude: true },
       discordChannels: { claude: 'ch-container' },
       instances: {
         claude: {
           instanceId: 'claude',
           agentType: 'claude',
-          tmuxWindow: 'test-project-claude',
+          runtimeWindow: 'test-project-claude',
           channelId: 'ch-container',
           containerMode: true,
           containerId: 'container-abc123',
@@ -157,14 +157,14 @@ describe('container agent → platform send', () => {
       const project = {
         projectName: 'multi',
         projectPath: tempDir,
-        tmuxSession: 'bridge',
+        runtimeSession: 'bridge',
         agents: { claude: true },
         discordChannels: { claude: 'ch-primary' },
         instances: {
           claude: {
             instanceId: 'claude',
             agentType: 'claude',
-            tmuxWindow: 'multi-claude',
+            runtimeWindow: 'multi-claude',
             channelId: 'ch-primary',
             containerMode: true,
             containerId: 'container-aaa',
@@ -172,7 +172,7 @@ describe('container agent → platform send', () => {
           'claude-2': {
             instanceId: 'claude-2',
             agentType: 'claude',
-            tmuxWindow: 'multi-claude-2',
+            runtimeWindow: 'multi-claude-2',
             channelId: 'ch-secondary',
             containerMode: true,
             containerId: 'container-bbb',
@@ -322,14 +322,14 @@ describe('container agent → platform send', () => {
       const project = {
         projectName: 'multi',
         projectPath: tempDir,
-        tmuxSession: 'bridge',
+        runtimeSession: 'bridge',
         agents: { claude: true },
         discordChannels: { claude: 'ch-primary' },
         instances: {
           claude: {
             instanceId: 'claude',
             agentType: 'claude',
-            tmuxWindow: 'multi-claude',
+            runtimeWindow: 'multi-claude',
             channelId: 'ch-primary',
             containerMode: true,
             containerId: 'container-aaa',
@@ -337,7 +337,7 @@ describe('container agent → platform send', () => {
           'claude-2': {
             instanceId: 'claude-2',
             agentType: 'claude',
-            tmuxWindow: 'multi-claude-2',
+            runtimeWindow: 'multi-claude-2',
             channelId: 'ch-secondary',
             containerMode: true,
             containerId: 'container-bbb',
@@ -522,20 +522,20 @@ describe('container agent → platform send', () => {
       const project = {
         projectName: 'multi',
         projectPath: tempDir,
-        tmuxSession: 'bridge',
+        runtimeSession: 'bridge',
         agents: { claude: true },
         discordChannels: { claude: 'ch-claude' },
         instances: {
           claude: {
             instanceId: 'claude',
             agentType: 'claude',
-            tmuxWindow: 'multi-claude',
+            runtimeWindow: 'multi-claude',
             channelId: 'ch-claude',
           },
           'claude-2': {
             instanceId: 'claude-2',
             agentType: 'claude',
-            tmuxWindow: 'multi-claude-2',
+            runtimeWindow: 'multi-claude-2',
             channelId: 'ch-claude-2',
           },
         },
@@ -695,7 +695,7 @@ describe('container agent → platform send', () => {
       const project = {
         projectName: 'multi',
         projectPath: tempDir,
-        tmuxSession: 'bridge',
+        runtimeSession: 'bridge',
         agents: { claude: true },
         discordChannels: { claude: 'ch-1' },
         instances: {

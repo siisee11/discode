@@ -48,6 +48,7 @@ vi.mock('../../src/container/sync.js', () => ({
 }));
 
 vi.mock('../../src/state/instances.js', () => ({
+  getProjectRuntimeSession: vi.fn((project: any) => project.runtimeSession || project.runtimeSession),
   listProjectInstances: (...args: any[]) => mockListProjectInstances(...args),
   normalizeProjectState: (...args: any[]) => mockNormalizeProjectState(...args),
 }));
@@ -108,7 +109,7 @@ function createProject(overrides: any = {}) {
   return {
     projectName: 'myapp',
     projectPath: '/home/user/myapp',
-    tmuxSession: 'bridge',
+    runtimeSession: 'bridge',
     agents: { opencode: true },
     discordChannels: { opencode: 'ch-opencode' },
     instances: {},
@@ -156,26 +157,24 @@ describe('restoreRuntimeWindowsIfNeeded', () => {
     mockListProjectInstances.mockReturnValue([]);
   });
 
-  it('returns early when runtimeMode is tmux (default)', () => {
+  it('restores projects when runtimeMode is omitted', () => {
     const deps = createDeps({
       bridgeConfig: createBridgeConfig({ runtimeMode: undefined }),
     });
 
     restoreRuntimeWindowsIfNeeded(deps);
 
-    expect(deps.stateManager.listProjects).not.toHaveBeenCalled();
-    expect(deps.runtime.startAgentInWindow).not.toHaveBeenCalled();
+    expect(deps.stateManager.listProjects).toHaveBeenCalled();
   });
 
-  it('returns early when runtimeMode is explicitly tmux', () => {
+  it('restores projects when runtimeMode is explicitly pty-rust', () => {
     const deps = createDeps({
-      bridgeConfig: createBridgeConfig({ runtimeMode: 'tmux' }),
+      bridgeConfig: createBridgeConfig({ runtimeMode: 'pty-rust' }),
     });
 
     restoreRuntimeWindowsIfNeeded(deps);
 
-    expect(deps.stateManager.listProjects).not.toHaveBeenCalled();
-    expect(deps.runtime.startAgentInWindow).not.toHaveBeenCalled();
+    expect(deps.stateManager.listProjects).toHaveBeenCalled();
   });
 
   it('skips instances where window already exists', () => {
@@ -325,7 +324,7 @@ describe('restoreRuntimeWindowsIfNeeded', () => {
   });
 
   it('sets DISCODE_PORT env on session', () => {
-    const project = createProject({ tmuxSession: 'my-session' });
+    const project = createProject({ runtimeSession: 'my-session' });
     mockListProjectInstances.mockReturnValue([]);
 
     const runtime = createRuntime();
@@ -413,8 +412,8 @@ describe('restoreRuntimeWindowsIfNeeded', () => {
   it('iterates over multiple projects and instances', () => {
     const instance1 = { instanceId: 'claude', agentType: 'claude' };
     const instance2 = { instanceId: 'gemini', agentType: 'gemini' };
-    const project1 = createProject({ projectName: 'proj1', tmuxSession: 'sess1' });
-    const project2 = createProject({ projectName: 'proj2', tmuxSession: 'sess2' });
+    const project1 = createProject({ projectName: 'proj1', runtimeSession: 'sess1' });
+    const project2 = createProject({ projectName: 'proj2', runtimeSession: 'sess2' });
 
     mockListProjectInstances
       .mockReturnValueOnce([instance1])

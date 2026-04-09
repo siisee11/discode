@@ -9,7 +9,6 @@ import { ensureTelemetryInstallId } from '../../telemetry/index.js';
 import { onboardDiscord } from './onboard-discord.js';
 import { onboardSlack } from './onboard-slack.js';
 import { parseRuntimeModeInput } from '../../runtime/mode.js';
-import type { RuntimeMode } from '../../types/index.js';
 
 type RegisteredAgentAdapter = ReturnType<typeof agentRegistry.getAll>[number];
 
@@ -73,30 +72,12 @@ async function choosePlatform(interactive: boolean = isInteractiveShell()): Prom
   return 'discord';
 }
 
-async function chooseRuntimeMode(
-  explicitMode?: string,
-  interactive: boolean = isInteractiveShell()
-): Promise<RuntimeMode> {
+async function chooseRuntimeMode(explicitMode?: string): Promise<'pty-rust'> {
   const parsedExplicit = parseRuntimeModeInput(explicitMode);
   if (parsedExplicit) {
-    return parsedExplicit;
+    return 'pty-rust';
   }
-
-  if (!interactive) {
-    console.log(chalk.yellow('⚠️ Non-interactive shell: using runtime mode tmux.'));
-    return 'tmux';
-  }
-
-  console.log(chalk.white('\nChoose runtime mode'));
-  console.log(chalk.gray('   1. tmux (default)'));
-  console.log(chalk.gray('   2. pty-rust'));
-
-  while (true) {
-    const answer = await prompt(chalk.white('\nSelect runtime mode [1-2] (Enter = default): '));
-    if (!answer || answer === '1') return 'tmux';
-    if (answer === '2') return 'pty-rust';
-    console.log(chalk.yellow('Please enter a valid number.'));
-  }
+  return 'pty-rust';
 }
 
 async function chooseTelemetryOptIn(interactive: boolean = isInteractiveShell()): Promise<boolean> {
@@ -146,12 +127,9 @@ export async function onboardCommand(options: {
       await onboardDiscord(token, interactive);
     }
 
-    const runtimeMode = await chooseRuntimeMode(
-      options.runtimeMode || (!interactive ? getConfigValue('runtimeMode') : undefined),
-      interactive
-    );
+    const runtimeMode = await chooseRuntimeMode(options.runtimeMode || getConfigValue('runtimeMode'));
     saveConfig({ runtimeMode });
-    console.log(chalk.green(`✅ Runtime mode saved: ${runtimeMode}`));
+    console.log(chalk.green('✅ Runtime backend: pty-rust'));
 
     const installedAgents = agentRegistry.getAll().filter((a) => a.isInstalled());
     let defaultAgentCli: string | undefined;

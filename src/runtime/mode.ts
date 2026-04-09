@@ -2,16 +2,15 @@ import type { RuntimeMode } from '../types/index.js';
 
 export type RuntimeModeInput = RuntimeMode;
 
-export function normalizeRuntimeMode(value: unknown): RuntimeMode {
-  if (value === 'pty-rust') return 'pty-rust';
-  return 'tmux';
+export function normalizeRuntimeMode(_value: unknown): RuntimeMode {
+  return 'pty-rust';
 }
 
 export function parseRuntimeModeInput(value: unknown): RuntimeMode | undefined {
-  if (value === 'tmux' || value === 'pty-rust') return value;
+  if (value === 'pty-rust') return 'pty-rust';
   return undefined;
 }
 
 export function isPtyRuntimeMode(mode: RuntimeModeInput | undefined): boolean {
-  return mode === 'pty-rust';
+  return normalizeRuntimeMode(mode) === 'pty-rust';
 }

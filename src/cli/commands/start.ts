@@ -3,25 +3,15 @@ import { AgentBridge } from '../../index.js';
 import { stateManager } from '../../state/index.js';
 import { config, getConfigPath, validateConfig } from '../../config/index.js';
 import { agentRegistry } from '../../agents/index.js';
-import { listProjectInstances } from '../../state/instances.js';
+import { getProjectRuntimeSession, listProjectInstances } from '../../state/instances.js';
 import type { TmuxCliOptions } from '../common/types.js';
-import {
-  applyTmuxCliOverrides,
-  attachToTmux,
-  ensureTmuxInstalled,
-  resolveProjectWindowName,
-} from '../common/tmux.js';
+import { applyTmuxCliOverrides, resolveProjectWindowName } from '../common/tmux.js';
 import { printCliError } from '../common/error-guide.js';
-import { isPtyRuntimeMode } from '../../runtime/mode.js';
 
 export async function startCommand(options: TmuxCliOptions & { project?: string; attach?: boolean }) {
   try {
     validateConfig();
     const effectiveConfig = applyTmuxCliOverrides(config, options);
-    const runtimeMode = effectiveConfig.runtimeMode || 'tmux';
-    if (!isPtyRuntimeMode(runtimeMode)) {
-      ensureTmuxInstalled();
-    }
 
     const projects = stateManager.listProjects();
 
@@ -71,7 +61,10 @@ export async function startCommand(options: TmuxCliOptions & { project?: string;
 
     if (options.attach) {
       const project = activeProjects[0];
-      const sessionName = project.tmuxSession;
+      const sessionName = getProjectRuntimeSession(project);
+      if (!sessionName) {
+        throw new Error(`Project '${project.projectName}' is missing a runtime session.`);
+      }
       const firstInstance = listProjectInstances(project)[0];
       const windowName = firstInstance
         ? resolveProjectWindowName(project, firstInstance.agentType, effectiveConfig.tmux, firstInstance.instanceId)
@@ -79,15 +72,10 @@ export async function startCommand(options: TmuxCliOptions & { project?: string;
       const attachTarget = windowName ? `${sessionName}:${windowName}` : sessionName;
 
       await bridge.start();
-      if (!isPtyRuntimeMode(runtimeMode)) {
-        console.log(chalk.cyan(`\n📺 Attaching to ${attachTarget}...\n`));
-        attachToTmux(sessionName, windowName);
-      } else {
-        console.log(chalk.cyan(`\n🧭 Runtime window ready: ${attachTarget}`));
-        console.log(chalk.cyan('📺 Opening discode TUI...\n'));
-        const { tuiCommand } = await import('./tui.js');
-        await tuiCommand(options);
-      }
+      console.log(chalk.cyan(`\n🧭 Runtime window ready: ${attachTarget}`));
+      console.log(chalk.cyan('📺 Opening runtime UI...\n'));
+      const { tuiCommand } = await import('./tui.js');
+      await tuiCommand(options);
       return;
     }
 

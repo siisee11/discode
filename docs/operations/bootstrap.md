@@ -14,7 +14,7 @@ Use this when running the published CLI package.
 
 1. Install Discode (`npm install -g @siisee11/discode` or `bun add -g @siisee11/discode`).
 2. Run onboarding (`discode onboard` for Discord, or `discode onboard --platform slack` for Slack).
-3. Enter your project directory and start a session (`discode new` or `discode new <agent>`).
+3. Enter your project directory and start a session (`discode new` or `discode new <agent>`). The CLI now uses the Rust PTY runtime by default and does not require a tmux runtime setup.
 
 ### Source Contributor Path
 
@@ -22,7 +22,7 @@ Use this when iterating on repository code.
 
 1. Install dependencies (`bun install`).
 2. Run the CLI from source (`bun run tsx bin/discode.ts onboard`, then `bun run tsx bin/discode.ts new`).
-3. For runtime-switch helpers and source-vs-release workflows, use [`../../DEVELOPMENT.md`](../../DEVELOPMENT.md).
+3. For source-vs-release workflow details, use [`../../DEVELOPMENT.md`](../../DEVELOPMENT.md).
 
 ## Setup Routing
 

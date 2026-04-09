@@ -8,7 +8,7 @@ Current frontend surfaces:
 
 - Landing page: `site/index.html`
 - Static docs site: `site/docs/**`
-- Terminal UI: `bin/tui.tsx`
+- Native terminal attach UI: `runtime-client-rs/src/main.rs`
 
 Use this routing:
 
@@ -22,4 +22,4 @@ Current reality:
 - the landing page is release-facing and must stay aligned with the latest shipped version
 - the landing page and docs site now have a worktree-scoped harness boot path for agent-browser validation
 - the static docs site still links to several legacy flat docs paths
-- the TUI is part of the runtime experience, not a separate web app
+- the primary local terminal UI is the Rust native attach client

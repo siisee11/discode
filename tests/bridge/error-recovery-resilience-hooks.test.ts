@@ -61,7 +61,7 @@ describe('hook server error resilience — hook failures & lifecycle', () => {
   const project = {
     projectName: 'test',
     projectPath: '/tmp/test',
-    tmuxSession: 'bridge',
+    runtimeSession: 'bridge',
     agents: { claude: true },
     discordChannels: { claude: 'ch-1' },
     instances: {

@@ -96,14 +96,14 @@ describe('buffer fallback integration (real tmux)', () => {
     const project = normalizeProjectState({
       projectName: 'discode',
       projectPath: '/Users/gui/discode',
-      tmuxSession: 'bridge',
+      runtimeSession: 'bridge',
       discordChannels: { claude: 'ch-test' },
       agents: { claude: true },
       instances: {
         claude: {
           instanceId: 'claude',
           agentType: 'claude',
-          tmuxWindow: 'discode-claude',
+          runtimeWindow: 'discode-claude',
           channelId: 'ch-test',
         },
       },

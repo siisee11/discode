@@ -49,7 +49,7 @@ function makeProject(name: string, channelId?: string): ProjectState {
   return {
     projectName: name,
     projectPath: `/path/${name}`,
-    tmuxSession: `agent-${name}`,
+    runtimeSession: `agent-${name}`,
     discordChannels: channelId ? { claude: channelId } : {},
     agents: { claude: true },
     createdAt: new Date(),
@@ -87,7 +87,7 @@ describe('StateManager', () => {
       expect(loaded).toBeDefined();
       expect(loaded?.projectName).toBe('test-project');
       expect(loaded?.projectPath).toBe('/path/test-project');
-      expect(loaded?.tmuxSession).toBe('agent-test-project');
+      expect(loaded?.runtimeSession).toBe('agent-test-project');
       expect(loaded?.discordChannels.claude).toBe('channel-123');
 
       expect(manager.getGuildId()).toBe('guild-456');
@@ -129,6 +129,7 @@ describe('StateManager', () => {
       const savedData = storage.readFile(stateFile, 'utf-8');
       const savedState = JSON.parse(savedData);
       expect(savedState.projects['my-project']).toBeDefined();
+      expect(savedState.projects['my-project'].runtimeSession).toBe('agent-my-project');
     });
 
     it('getProject returns existing project', () => {

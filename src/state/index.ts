@@ -1,6 +1,6 @@
 /**
  * Project state management
- * Tracks active projects, their Discord channels, and tmux sessions
+ * Tracks active projects, their messaging channels, and runtime sessions
  */
 
 import { join } from 'path';
@@ -8,7 +8,7 @@ import { homedir } from 'os';
 import type { IStorage, IStateManager } from '../types/interfaces.js';
 import type { ProjectState as SharedProjectState } from '../types/index.js';
 import { FileStorage } from '../infra/storage.js';
-import { findProjectInstanceByChannel, normalizeProjectState } from './instances.js';
+import { findProjectInstanceByChannel, normalizeProjectState, serializeProjectState } from './instances.js';
 
 export type ProjectState = SharedProjectState;
 
@@ -57,7 +57,16 @@ export class StateManager implements IStateManager {
     if (!this.storage.exists(this.stateDir)) {
       this.storage.mkdirp(this.stateDir);
     }
-    this.storage.writeFile(this.stateFile, JSON.stringify(this.state, null, 2));
+    const serializedState: BridgeState = {
+      ...this.state,
+      projects: Object.fromEntries(
+        Object.entries(this.state.projects).map(([projectName, project]) => [
+          projectName,
+          serializeProjectState(project),
+        ]),
+      ),
+    };
+    this.storage.writeFile(this.stateFile, JSON.stringify(serializedState, null, 2));
   }
 
   reload(): void {

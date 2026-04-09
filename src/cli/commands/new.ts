@@ -3,12 +3,12 @@ import { basename, resolve } from 'path';
 import chalk from 'chalk';
 import { stateManager } from '../../state/index.js';
 import { validateConfig, config } from '../../config/index.js';
-import { TmuxManager } from '../../tmux/manager.js';
 import { agentRegistry } from '../../agents/index.js';
 import {
   buildNextInstanceId,
   getPrimaryInstanceForAgent,
   getProjectInstance,
+  getProjectRuntimeSession,
   listProjectInstances,
 } from '../../state/instances.js';
 import { ensureDaemonRunning } from '../../app/daemon-service.js';
@@ -16,18 +16,13 @@ import { resumeProjectInstance, setupProjectInstance } from '../../app/project-s
 import type { TmuxCliOptions } from '../common/types.js';
 import {
   applyTmuxCliOverrides,
-  attachToTmux,
   cleanupStaleDiscodeTuiProcesses,
-  ensureProjectTuiPane,
-  ensureTmuxInstalled,
-  pruneStaleProjects,
   resolveProjectWindowName,
   toSharedWindowName,
 } from '../common/tmux.js';
 import { isInteractiveShell, prompt } from '../common/interactive.js';
 import { ensureOpencodePermissionChoice } from '../common/opencode-permission.js';
 import { printCliError } from '../common/error-guide.js';
-import { isPtyRuntimeMode } from '../../runtime/mode.js';
 
 export async function newCommand(
   agentArg: string | undefined,
@@ -38,10 +33,6 @@ export async function newCommand(
     const effectiveConfig = applyTmuxCliOverrides(config, options);
     if (options.container) {
       effectiveConfig.container = { enabled: true, ...effectiveConfig.container };
-    }
-    const runtimeMode = effectiveConfig.runtimeMode || 'tmux';
-    if (!isPtyRuntimeMode(runtimeMode)) {
-      ensureTmuxInstalled();
     }
 
     const isSlack = effectiveConfig.messagingPlatform === 'slack';
@@ -64,14 +55,6 @@ export async function newCommand(
     }
 
     console.log(chalk.cyan(`\n🚀 discode new — ${projectName}\n`));
-
-    const tmux = isPtyRuntimeMode(runtimeMode) ? undefined : new TmuxManager(effectiveConfig.tmux.sessionPrefix);
-    if (tmux) {
-      const prunedProjects = pruneStaleProjects(tmux, effectiveConfig.tmux);
-      if (prunedProjects.length > 0) {
-        console.log(chalk.yellow(`⚠️ Pruned stale project state: ${prunedProjects.join(', ')}`));
-      }
-    }
 
     let agentName: string;
     let activeInstanceId: string | undefined;
@@ -225,7 +208,9 @@ export async function newCommand(
     }
 
     const projectState = stateManager.getProject(projectName);
-    const sessionName = projectState?.tmuxSession || `${effectiveConfig.tmux.sessionPrefix}${projectName}`;
+    const sessionName = projectState
+      ? getProjectRuntimeSession(projectState) || `${effectiveConfig.tmux.sessionPrefix}${projectName}`
+      : `${effectiveConfig.tmux.sessionPrefix}${projectName}`;
     const summaryInstance = projectState && activeInstanceId ? getProjectInstance(projectState, activeInstanceId) : undefined;
     if (summaryInstance) {
       agentName = summaryInstance.agentType;
@@ -234,16 +219,8 @@ export async function newCommand(
       ? resolveProjectWindowName(projectState, agentName, effectiveConfig.tmux, activeInstanceId)
       : toSharedWindowName(projectName, activeInstanceId || agentName);
     const isInteractive = process.stdin.isTTY && process.stdout.isTTY;
-    if (isInteractive && tmux) {
-      try {
-        ensureProjectTuiPane(tmux, sessionName, statusWindowName, options);
-      } catch (error) {
-        console.log(chalk.yellow(`⚠️ Could not start discode TUI pane: ${error instanceof Error ? error.message : String(error)}`));
-      }
-    } else if (!isInteractive) {
+    if (!isInteractive) {
       console.log(chalk.gray('   Non-interactive shell detected; skipping automatic discode TUI pane startup.'));
-    } else {
-      console.log(chalk.gray(`   Runtime mode is ${runtimeMode}; skipping tmux pane startup.`));
     }
     console.log(chalk.cyan('\n✨ Ready!\n'));
     console.log(chalk.gray(`   Project:  ${projectName}`));
@@ -253,16 +230,9 @@ export async function newCommand(
     console.log(chalk.gray(`   Port:     ${port}`));
 
     if (options.attach !== false) {
-      const windowName = statusWindowName;
-      const attachTarget = `${sessionName}:${windowName}`;
-      if (!isPtyRuntimeMode(runtimeMode)) {
-        console.log(chalk.cyan(`\n📺 Attaching to ${attachTarget}...\n`));
-        attachToTmux(sessionName, windowName);
-        return;
-      }
-
+      const attachTarget = `${sessionName}:${statusWindowName}`;
       console.log(chalk.cyan(`\n🧭 Runtime window ready: ${attachTarget}`));
-      console.log(chalk.cyan('📺 Opening discode TUI...\n'));
+      console.log(chalk.cyan('📺 Opening runtime UI...\n'));
       const { attachCommand } = await import('./attach.js');
       await attachCommand(projectName, {
         instance: activeInstanceId,

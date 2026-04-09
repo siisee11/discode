@@ -69,7 +69,7 @@ export function createStateWithProject(
   const project: ProjectState = normalizeProjectState({
     projectName,
     projectPath,
-    tmuxSession: `agent-${projectName}`,
+    runtimeSession: `agent-${projectName}`,
     agents: { [agentType]: true },
     discordChannels: { [agentType]: channelId },
     instances: {

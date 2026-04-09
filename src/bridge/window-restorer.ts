@@ -13,6 +13,7 @@ import { resolveProjectWindowName } from '../policy/window-naming.js';
 import { buildDockerStartCommand } from '../container/index.js';
 import { ContainerSync } from '../container/sync.js';
 import {
+  getProjectRuntimeSession,
   listProjectInstances,
   normalizeProjectState,
 } from '../state/instances.js';
@@ -33,15 +34,15 @@ export interface WindowRestorerDeps {
 }
 
 export function restoreRuntimeWindowsIfNeeded(deps: WindowRestorerDeps): void {
-  if (deps.bridgeConfig.runtimeMode === 'tmux' || !deps.bridgeConfig.runtimeMode) return;
-
   const port = deps.bridgeConfig.hookServerPort || 18470;
   const permissionAllow = deps.bridgeConfig.opencode?.permissionMode === 'allow';
   const socketPath = deps.bridgeConfig.container?.socketPath || undefined;
 
   for (const raw of deps.stateManager.listProjects()) {
     const project = normalizeProjectState(raw);
-    deps.runtime.setSessionEnv(project.tmuxSession, 'DISCODE_PORT', String(port));
+    const runtimeSession = getProjectRuntimeSession(project);
+    if (!runtimeSession) continue;
+    deps.runtime.setSessionEnv(runtimeSession, 'DISCODE_PORT', String(port));
 
     for (const instance of listProjectInstances(project)) {
       const adapter = deps.registry.get(instance.agentType);
@@ -66,14 +67,14 @@ export function restoreRuntimeWindowsIfNeeded(deps: WindowRestorerDeps): void {
         instance.instanceId,
       );
 
-      if (deps.runtime.windowExists(project.tmuxSession, windowName)) continue;
+      if (deps.runtime.windowExists(runtimeSession, windowName)) continue;
 
       if (instance.containerMode && instance.containerId) {
-        restoreContainerInstance(deps, project, { ...instance, containerId: instance.containerId }, windowName, socketPath);
+        restoreContainerInstance(deps, project, runtimeSession, { ...instance, containerId: instance.containerId }, windowName, socketPath);
         continue;
       }
 
-      restoreStandardInstance(deps, project, instance, windowName, port, permissionAllow, adapter);
+      restoreStandardInstance(deps, project, runtimeSession, instance, windowName, port, permissionAllow, adapter);
     }
   }
 }
@@ -81,12 +82,13 @@ export function restoreRuntimeWindowsIfNeeded(deps: WindowRestorerDeps): void {
 function restoreContainerInstance(
   deps: WindowRestorerDeps,
   project: ReturnType<typeof normalizeProjectState>,
+  runtimeSession: string,
   instance: { instanceId: string; containerId: string },
   windowName: string,
   socketPath: string | undefined,
 ): void {
   const dockerStartCmd = buildDockerStartCommand(instance.containerId, socketPath);
-  deps.runtime.startAgentInWindow(project.tmuxSession, windowName, dockerStartCmd);
+  deps.runtime.startAgentInWindow(runtimeSession, windowName, dockerStartCmd);
 
   const sync = new ContainerSync({
     containerId: instance.containerId,
@@ -101,6 +103,7 @@ function restoreContainerInstance(
 function restoreStandardInstance(
   deps: WindowRestorerDeps,
   project: ReturnType<typeof normalizeProjectState>,
+  runtimeSession: string,
   instance: { instanceId: string; agentType: string },
   windowName: string,
   port: number,
@@ -124,5 +127,5 @@ function restoreStandardInstance(
     ...extraEnv,
   });
 
-  deps.runtime.startAgentInWindow(project.tmuxSession, windowName, `${exportPrefix}${startCommand}`);
+  deps.runtime.startAgentInWindow(runtimeSession, windowName, `${exportPrefix}${startCommand}`);
 }

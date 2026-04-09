@@ -278,11 +278,11 @@ impl HookServer {
 
         let session_name = project
             .as_object()
-            .and_then(|obj| obj.get("tmuxSession"))
+            .and_then(|obj| obj.get("runtimeSession"))
             .and_then(non_empty_str);
         let window_name = instance
             .as_object()
-            .and_then(|obj| obj.get("tmuxWindow"))
+            .and_then(|obj| obj.get("runtimeWindow"))
             .and_then(non_empty_str);
         let project_path = project
             .as_object()
@@ -1062,12 +1062,12 @@ mod tests {
                     "demo": {
                         "projectName": "demo",
                         "projectPath": "/tmp/demo",
-                        "tmuxSession": "bridge",
+                        "runtimeSession": "bridge",
                         "instances": {
                             "opencode": {
                                 "instanceId": "opencode",
                                 "agentType": "opencode",
-                                "tmuxWindow": "demo-opencode",
+                                "runtimeWindow": "demo-opencode",
                                 "channelId": "ch-1"
                             }
                         }
@@ -1297,12 +1297,12 @@ mod tests {
                     "demo": {
                         "projectName": "demo",
                         "projectPath": "/tmp/demo",
-                        "tmuxSession": "bridge",
+                        "runtimeSession": "bridge",
                         "instances": {
                             "custom-agent": {
                                 "instanceId": "custom-agent",
                                 "agentType": "custom-agent",
-                                "tmuxWindow": "demo-custom",
+                                "runtimeWindow": "demo-custom",
                                 "channelId": "ch-1"
                             }
                         }

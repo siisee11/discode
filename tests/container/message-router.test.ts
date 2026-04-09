@@ -86,14 +86,14 @@ describe('BridgeMessageRouter container file injection', () => {
     const project = normalizeProjectState({
       projectName: 'test',
       projectPath: '/test/path',
-      tmuxSession: 'session',
+      runtimeSession: 'session',
       discordChannels: { claude: 'ch-1' },
       agents: { claude: true },
       instances: {
         claude: {
           instanceId: 'claude',
           agentType: 'claude',
-          tmuxWindow: 'test-claude',
+          runtimeWindow: 'test-claude',
           channelId: 'ch-1',
           containerMode: true,
           containerId: 'container-abc',
@@ -128,14 +128,14 @@ describe('BridgeMessageRouter container file injection', () => {
     const project = normalizeProjectState({
       projectName: 'test',
       projectPath: '/test/path',
-      tmuxSession: 'session',
+      runtimeSession: 'session',
       discordChannels: { claude: 'ch-1' },
       agents: { claude: true },
       instances: {
         claude: {
           instanceId: 'claude',
           agentType: 'claude',
-          tmuxWindow: 'test-claude',
+          runtimeWindow: 'test-claude',
           channelId: 'ch-1',
         },
       },
@@ -164,14 +164,14 @@ describe('BridgeMessageRouter container file injection', () => {
     const project = normalizeProjectState({
       projectName: 'test',
       projectPath: '/test/path',
-      tmuxSession: 'session',
+      runtimeSession: 'session',
       discordChannels: { codex: 'ch-codex' },
       agents: { codex: true },
       instances: {
         codex: {
           instanceId: 'codex',
           agentType: 'codex',
-          tmuxWindow: 'test-codex',
+          runtimeWindow: 'test-codex',
           channelId: 'ch-codex',
         },
       },
@@ -238,14 +238,14 @@ describe('BridgeMessageRouter SDK routing', () => {
     const project = normalizeProjectState({
       projectName: 'test',
       projectPath: '/test/path',
-      tmuxSession: 'session',
+      runtimeSession: 'session',
       discordChannels: { claude: 'ch-1' },
       agents: { claude: true },
       instances: {
         claude: {
           instanceId: 'claude',
           agentType: 'claude',
-          tmuxWindow: 'test-claude',
+          runtimeWindow: 'test-claude',
           channelId: 'ch-1',
           runtimeType: 'sdk',
         },
@@ -271,14 +271,14 @@ describe('BridgeMessageRouter SDK routing', () => {
     const project = normalizeProjectState({
       projectName: 'test',
       projectPath: '/test/path',
-      tmuxSession: 'session',
+      runtimeSession: 'session',
       discordChannels: { claude: 'ch-1' },
       agents: { claude: true },
       instances: {
         claude: {
           instanceId: 'claude',
           agentType: 'claude',
-          tmuxWindow: 'test-claude',
+          runtimeWindow: 'test-claude',
           channelId: 'ch-1',
           runtimeType: 'sdk',
         },
@@ -297,20 +297,20 @@ describe('BridgeMessageRouter SDK routing', () => {
     );
   });
 
-  it('uses tmux path when runtimeType is not sdk', async () => {
+  it('uses runtime window path when runtimeType is not sdk', async () => {
     const project = normalizeProjectState({
       projectName: 'test',
       projectPath: '/test/path',
-      tmuxSession: 'session',
+      runtimeSession: 'session',
       discordChannels: { claude: 'ch-1' },
       agents: { claude: true },
       instances: {
         claude: {
           instanceId: 'claude',
           agentType: 'claude',
-          tmuxWindow: 'test-claude',
+          runtimeWindow: 'test-claude',
           channelId: 'ch-1',
-          runtimeType: 'tmux',
+          runtimeType: 'pty-rust',
         },
       },
       createdAt: new Date(),

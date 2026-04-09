@@ -122,24 +122,24 @@ describe('parseOnboardCommand', () => {
     expect(result.error).toBe('platform must be discord or slack.');
   });
 
-  it('parses --runtime-mode tmux', () => {
-    const result = parseOnboardCommand('/onboard --runtime-mode tmux');
-    expect(result.options.runtimeMode).toBe('tmux');
-  });
-
   it('parses --runtime-mode pty-rust', () => {
     const result = parseOnboardCommand('/onboard --runtime-mode pty-rust');
     expect(result.options.runtimeMode).toBe('pty-rust');
   });
 
   it('rejects legacy runtime-mode aliases', () => {
-    expect(parseOnboardCommand('/onboard --runtime-mode pty').error).toBe('runtime mode must be tmux or pty-rust.');
-    expect(parseOnboardCommand('/onboard --runtime-mode pty-ts').error).toBe('runtime mode must be tmux or pty-rust.');
+    expect(parseOnboardCommand('/onboard --runtime-mode pty').error).toBe('runtime mode must be pty-rust.');
+    expect(parseOnboardCommand('/onboard --runtime-mode pty-ts').error).toBe('runtime mode must be pty-rust.');
   });
 
   it('returns error for invalid runtime-mode', () => {
     const result = parseOnboardCommand('/onboard --runtime-mode screen');
-    expect(result.error).toBe('runtime mode must be tmux or pty-rust.');
+    expect(result.error).toBe('runtime mode must be pty-rust.');
+  });
+
+  it('returns error for removed tmux runtime-mode', () => {
+    const result = parseOnboardCommand('/onboard --runtime-mode tmux');
+    expect(result.error).toBe('runtime mode must be pty-rust.');
   });
 
   it('parses --token', () => {
@@ -238,10 +238,10 @@ describe('parseOnboardCommand', () => {
   });
 
   it('parses multiple flags together', () => {
-    const result = parseOnboardCommand('/onboard --platform discord --token abc --runtime-mode tmux --telemetry on');
+    const result = parseOnboardCommand('/onboard --platform discord --token abc --runtime-mode pty-rust --telemetry on');
     expect(result.options.platform).toBe('discord');
     expect(result.options.token).toBe('abc');
-    expect(result.options.runtimeMode).toBe('tmux');
+    expect(result.options.runtimeMode).toBe('pty-rust');
     expect(result.options.telemetryEnabled).toBe(true);
     expect(result.error).toBeUndefined();
   });

@@ -44,7 +44,7 @@ export async function configCommand(options: {
     console.log(chalk.gray(`   Hook Port: ${config.hookServerPort || 18470}`));
     console.log(chalk.gray(`   Default AI CLI: ${config.defaultAgentCli || '(not set)'}`));
     console.log(chalk.gray(`   OpenCode Permission Mode: ${config.opencode?.permissionMode || '(not set)'}`));
-    console.log(chalk.gray(`   Runtime Mode: ${config.runtimeMode || 'tmux'}`));
+    console.log(chalk.gray('   Runtime Backend: pty-rust'));
     console.log(chalk.gray(`   Container Isolation: ${config.container?.enabled ? 'on' : 'off'}`));
     if (config.container?.socketPath) {
       console.log(chalk.gray(`   Container Socket: ${config.container.socketPath}`));
@@ -105,10 +105,11 @@ export async function configCommand(options: {
     const parsed = parseRuntimeModeInput(options.runtimeMode.trim().toLowerCase());
     if (!parsed) {
       console.error(chalk.red(`Invalid runtime mode: ${options.runtimeMode}`));
+      console.error(chalk.red('Only pty-rust is supported.'));
       process.exit(1);
     }
-    saveConfig({ runtimeMode: parsed });
-    console.log(chalk.green(`✅ Runtime mode saved: ${parsed}`));
+    saveConfig({ runtimeMode: 'pty-rust' });
+    console.log(chalk.green('✅ Runtime backend saved: pty-rust'));
     updated = true;
   }
 

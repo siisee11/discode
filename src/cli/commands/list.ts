@@ -1,20 +1,14 @@
 import chalk from 'chalk';
 import { stateManager } from '../../state/index.js';
 import { config } from '../../config/index.js';
-import { TmuxManager } from '../../tmux/manager.js';
-import { listProjectInstances } from '../../state/instances.js';
+import { getProjectRuntimeSession, listProjectInstances } from '../../state/instances.js';
 import { agentRegistry } from '../../agents/index.js';
 import { resolveProjectWindowName } from '../common/tmux.js';
 import { listRuntimeWindows } from '../common/runtime-api.js';
-import { isPtyRuntimeMode } from '../../runtime/mode.js';
 
 export async function listCommand(options?: { prune?: boolean }) {
   const projects = stateManager.listProjects();
-  const tmux = new TmuxManager(config.tmux.sessionPrefix);
-  const runtimeMode = config.runtimeMode || 'tmux';
-  const runtimeWindows = isPtyRuntimeMode(runtimeMode)
-    ? await listRuntimeWindows(config.hookServerPort || 18470)
-    : null;
+  const runtimeWindows = await listRuntimeWindows(config.hookServerPort || 18470);
   const runtimeSet = new Set((runtimeWindows?.windows || []).map((window) => `${window.sessionName}:${window.windowName}`));
   const prune = !!options?.prune;
 
@@ -26,6 +20,7 @@ export async function listCommand(options?: { prune?: boolean }) {
   const pruned: string[] = [];
   console.log(chalk.cyan('\n📂 Configured Projects:\n'));
   for (const project of projects) {
+    const sessionName = getProjectRuntimeSession(project);
     const instances = listProjectInstances(project);
     const labels = instances.map((instance) => {
       const agentLabel = agentRegistry.get(instance.agentType)?.config.displayName || instance.agentType;
@@ -36,12 +31,10 @@ export async function listCommand(options?: { prune?: boolean }) {
       agentName: instance.agentType,
       windowName: resolveProjectWindowName(project, instance.agentType, config.tmux, instance.instanceId),
     }));
-    const runningWindows = runtimeWindows
-      ? windows.filter((window) => runtimeSet.has(`${project.tmuxSession}:${window.windowName}`))
-      : (tmux.sessionExistsFull(project.tmuxSession)
-        ? windows.filter((window) => tmux.windowExists(project.tmuxSession, window.windowName))
-        : []);
-    const sessionUp = runtimeWindows ? runningWindows.length > 0 : tmux.sessionExistsFull(project.tmuxSession);
+    const runningWindows = sessionName
+      ? windows.filter((window) => runtimeSet.has(`${sessionName}:${window.windowName}`))
+      : [];
+    const sessionUp = runningWindows.length > 0;
     const status = runningWindows.length > 0 ? 'running' : sessionUp ? 'session only' : 'stale';
 
     if (prune && status !== 'running') {
@@ -56,7 +49,7 @@ export async function listCommand(options?: { prune?: boolean }) {
     console.log(chalk.gray(`    Status: ${status}`));
     if (windows.length > 0) {
       for (const window of windows) {
-        console.log(chalk.gray(`    ${runtimeMode}(${window.instanceId}): ${project.tmuxSession}:${window.windowName}`));
+        console.log(chalk.gray(`    pty-rust(${window.instanceId}): ${(sessionName || '(missing-session)')}:${window.windowName}`));
       }
     }
   }

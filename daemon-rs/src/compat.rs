@@ -61,11 +61,8 @@ impl CompatState {
 }
 
 pub fn normalize_runtime_mode(value: Option<&str>) -> &'static str {
-    if value == Some("pty-rust") {
-        "pty-rust"
-    } else {
-        "tmux"
-    }
+    let _ = value;
+    "pty-rust"
 }
 
 pub fn normalize_state_json(input: &Value) -> Value {
@@ -94,7 +91,14 @@ pub fn normalize_state_json(input: &Value) -> Value {
 fn normalize_project_object(project: &Map<String, Value>) -> Map<String, Value> {
     let mut normalized_project = project.clone();
     let instances = normalize_instance_map(project);
-    let (agents, discord_channels, tmux_windows, event_hooks) = derive_legacy_maps(&instances);
+    let (agents, discord_channels, runtime_windows, event_hooks) = derive_legacy_maps(&instances);
+
+    set_optional_string(
+        &mut normalized_project,
+        "runtimeSession",
+        non_empty_string(project.get("runtimeSession")),
+    );
+    normalized_project.remove("tmuxSession");
 
     normalized_project.insert("instances".to_string(), Value::Object(instances));
     normalized_project.insert("agents".to_string(), Value::Object(agents));
@@ -103,11 +107,12 @@ fn normalize_project_object(project: &Map<String, Value>) -> Map<String, Value> 
         Value::Object(discord_channels),
     );
 
-    if tmux_windows.is_empty() {
-        normalized_project.remove("tmuxWindows");
+    if runtime_windows.is_empty() {
+        normalized_project.remove("runtimeWindows");
     } else {
-        normalized_project.insert("tmuxWindows".to_string(), Value::Object(tmux_windows));
+        normalized_project.insert("runtimeWindows".to_string(), Value::Object(runtime_windows));
     }
+    normalized_project.remove("tmuxWindows");
 
     if event_hooks.is_empty() {
         normalized_project.remove("eventHooks");
@@ -144,27 +149,23 @@ fn normalize_instance_map(project: &Map<String, Value>) -> Map<String, Value> {
                 continue;
             };
 
-            let channel_id = non_empty_string(
-                instance_obj
-                    .get("channelId")
-                    .or_else(|| instance_obj.get("discordChannelId")),
-            );
+            let channel_id = non_empty_string(instance_obj.get("channelId"));
 
             let mut instance = instance_obj.clone();
             instance.insert("instanceId".to_string(), Value::String(instance_id.clone()));
             instance.insert("agentType".to_string(), Value::String(agent_type));
             set_optional_string(
                 &mut instance,
-                "tmuxWindow",
-                non_empty_string(instance_obj.get("tmuxWindow")),
+                "runtimeWindow",
+                non_empty_string(instance_obj.get("runtimeWindow")),
             );
             set_optional_string(&mut instance, "channelId", channel_id);
-            instance.remove("discordChannelId");
             set_optional_bool(
                 &mut instance,
                 "eventHook",
                 instance_obj.get("eventHook").and_then(Value::as_bool),
             );
+            instance.remove("tmuxWindow");
 
             if instance_obj.get("containerMode").and_then(Value::as_bool) == Some(true) {
                 instance.insert("containerMode".to_string(), Value::Bool(true));
@@ -184,10 +185,10 @@ fn normalize_instance_map(project: &Map<String, Value>) -> Map<String, Value> {
             );
 
             let runtime_type = instance_obj.get("runtimeType").and_then(Value::as_str);
-            if matches!(runtime_type, Some("tmux") | Some("sdk")) {
+            if matches!(runtime_type, Some("pty-rust") | Some("sdk")) {
                 instance.insert(
                     "runtimeType".to_string(),
-                    Value::String(runtime_type.unwrap_or("tmux").to_string()),
+                    Value::String(runtime_type.unwrap_or("pty-rust").to_string()),
                 );
             } else {
                 instance.remove("runtimeType");
@@ -221,7 +222,7 @@ fn normalize_legacy_instances(project: &Map<String, Value>) -> Map<String, Value
         }
     }
 
-    for source in ["discordChannels", "tmuxWindows", "eventHooks"] {
+    for source in ["discordChannels", "runtimeWindows", "eventHooks"] {
         if let Some(map) = project.get(source).and_then(Value::as_object) {
             for agent_type in map.keys() {
                 if is_agent_disabled(project, agent_type) {
@@ -246,9 +247,9 @@ fn normalize_legacy_instances(project: &Map<String, Value>) -> Map<String, Value
 
         set_optional_string(
             &mut instance,
-            "tmuxWindow",
+            "runtimeWindow",
             project
-                .get("tmuxWindows")
+                .get("runtimeWindows")
                 .and_then(Value::as_object)
                 .and_then(|map| map.get(&agent_type))
                 .and_then(|value| non_empty_string(Some(value))),
@@ -292,7 +293,7 @@ fn derive_legacy_maps(
 
     let mut agents = Map::new();
     let mut discord_channels = Map::new();
-    let mut tmux_windows = Map::new();
+    let mut runtime_windows = Map::new();
     let mut event_hooks = Map::new();
 
     for (_, instance_value) in sorted {
@@ -311,9 +312,9 @@ fn derive_legacy_maps(
             }
         }
 
-        if !tmux_windows.contains_key(agent_type) {
-            if let Some(tmux_window) = non_empty_string(instance.get("tmuxWindow")) {
-                tmux_windows.insert(agent_type.to_string(), Value::String(tmux_window));
+        if !runtime_windows.contains_key(agent_type) {
+            if let Some(runtime_window) = non_empty_string(instance.get("runtimeWindow")) {
+                runtime_windows.insert(agent_type.to_string(), Value::String(runtime_window));
             }
         }
 
@@ -324,7 +325,7 @@ fn derive_legacy_maps(
         }
     }
 
-    (agents, discord_channels, tmux_windows, event_hooks)
+    (agents, discord_channels, runtime_windows, event_hooks)
 }
 
 fn is_agent_disabled(project: &Map<String, Value>, agent_type: &str) -> bool {
@@ -455,22 +456,27 @@ mod tests {
         };
         assert_eq!(config.runtime_mode(), "pty-rust");
 
-        let legacy_runtime_mode_config =
-            read_compat_fixture_json("config-legacy-runtime-mode.json");
-        let config = CompatConfig {
-            raw: legacy_runtime_mode_config,
-        };
-        assert_eq!(config.runtime_mode(), "tmux");
-
         let config = CompatConfig {
             raw: serde_json::json!({}),
         };
-        assert_eq!(config.runtime_mode(), "tmux");
+        assert_eq!(config.runtime_mode(), "pty-rust");
     }
 
     #[test]
-    fn state_loader_normalizes_legacy_maps_to_instances() {
-        let state = read_compat_fixture_json("state-legacy-maps.json");
+    fn state_loader_normalizes_runtime_maps_to_instances() {
+        let state = serde_json::json!({
+            "projects": {
+                "demo": {
+                    "projectName": "demo",
+                    "projectPath": "/tmp/demo",
+                    "runtimeSession": "bridge",
+                    "agents": { "claude": true },
+                    "discordChannels": { "claude": "ch-1" },
+                    "runtimeWindows": { "claude": "demo-claude" },
+                    "eventHooks": { "claude": true }
+                }
+            }
+        });
 
         let normalized = normalize_state_json(&state);
         let instance = normalized["projects"]["demo"]["instances"]["claude"].clone();
@@ -478,24 +484,39 @@ mod tests {
         assert_eq!(instance["agentType"], Value::String("claude".to_string()));
         assert_eq!(instance["channelId"], Value::String("ch-1".to_string()));
         assert_eq!(
-            instance["tmuxWindow"],
+            instance["runtimeWindow"],
             Value::String("demo-claude".to_string())
         );
         assert_eq!(instance["eventHook"], Value::Bool(true));
     }
 
     #[test]
-    fn state_loader_supports_legacy_discord_channel_id_alias() {
-        let state = read_compat_fixture_json("state-legacy-discord-channel-alias.json");
+    fn state_loader_preserves_canonical_channel_id() {
+        let state = serde_json::json!({
+            "projects": {
+                "demo": {
+                    "projectName": "demo",
+                    "projectPath": "/tmp/demo",
+                    "instances": {
+                        "claude": {
+                            "instanceId": "claude",
+                            "agentType": "claude",
+                            "channelId": "ch-1",
+                            "runtimeWindow": "demo-claude"
+                        }
+                    }
+                }
+            }
+        });
 
         let normalized = normalize_state_json(&state);
         assert_eq!(
             normalized["projects"]["demo"]["instances"]["claude"]["channelId"],
-            Value::String("legacy-ch-1".to_string())
+            Value::String("ch-1".to_string())
         );
         assert_eq!(
             normalized["projects"]["demo"]["discordChannels"]["claude"],
-            Value::String("legacy-ch-1".to_string())
+            Value::String("ch-1".to_string())
         );
     }
 
@@ -503,7 +524,33 @@ mod tests {
     fn state_roundtrip_preserves_unknown_fields() {
         let dir = unique_temp_dir("discode-daemon-rs-state");
         let path = dir.join(STATE_FILE_NAME);
-        let payload = read_compat_fixture_json("state-multi-instance-roundtrip.json");
+        let payload = serde_json::json!({
+            "customRoot": "root-value",
+            "projects": {
+                "demo": {
+                    "projectName": "demo",
+                    "projectPath": "/tmp/demo",
+                    "runtimeSession": "bridge",
+                    "customProject": { "value": 1 },
+                    "instances": {
+                        "opencode": {
+                            "instanceId": "opencode",
+                            "agentType": "opencode",
+                            "runtimeWindow": "demo-opencode",
+                            "channelId": "ch-opencode",
+                            "customInstance": "keep-op"
+                        },
+                        "claude": {
+                            "instanceId": "claude",
+                            "agentType": "claude",
+                            "runtimeWindow": "demo-claude",
+                            "channelId": "ch-claude",
+                            "customInstance": "keep-claude"
+                        }
+                    }
+                }
+            }
+        });
         std::fs::write(
             &path,
             serde_json::to_string_pretty(&payload).expect("payload should encode"),
@@ -532,7 +579,7 @@ mod tests {
         );
         assert_eq!(
             reloaded.normalized()["projects"]["demo"]["instances"]["claude"]["channelId"],
-            Value::String("legacy-ch-claude".to_string())
+            Value::String("ch-claude".to_string())
         );
     }
 

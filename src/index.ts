@@ -35,8 +35,6 @@ import { restoreRuntimeWindowsIfNeeded } from './bridge/window-restorer.js';
 
 export interface AgentBridgeDeps {
   messaging?: MessagingClient;
-  /** @deprecated Use `runtime` instead. */
-  tmux?: AgentRuntime;
   runtime?: AgentRuntime;
   stateManager?: IStateManager;
   registry?: AgentRegistry;
@@ -66,7 +64,7 @@ export class AgentBridge {
   constructor(deps?: AgentBridgeDeps) {
     this.bridgeConfig = deps?.config || defaultConfig;
     this.messaging = deps?.messaging || this.createMessagingClient();
-    this.runtime = deps?.runtime || deps?.tmux || this.createRuntime();
+    this.runtime = deps?.runtime || this.createRuntime();
     this.stateManager = deps?.stateManager || defaultStateManager;
     this.registry = deps?.registry || defaultAgentRegistry;
     this.pendingTracker = new PendingMessageTracker(this.messaging);
@@ -210,7 +208,7 @@ export class AgentBridge {
     channelDisplayName?: string,
     overridePort?: number,
     options?: { instanceId?: string; skipRuntimeStart?: boolean },
-  ): Promise<{ channelName: string; channelId: string; agentName: string; tmuxSession: string }> {
+  ): Promise<{ channelName: string; channelId: string; agentName: string; runtimeSession: string }> {
     const deps: ProjectSetupDeps = {
       messaging: this.messaging,
       runtime: this.runtime,

@@ -1,7 +1,7 @@
 {
   "name": "@siisee11/discode",
   "version": "0.10.0",
-  "description": "Bridge AI agent outputs to Discord via Claude Code hooks and tmux",
+  "description": "Bridge AI agent outputs to Discord or Slack via Rust runtime-backed local sessions",
   "type": "module",
   "main": "./dist/index.js",
   "bin": {
@@ -54,7 +54,7 @@
     "discord",
     "ai-agent",
     "claude-code",
-    "tmux",
+    "pty-rust",
     "bridge"
   ],
   "author": "",
@@ -80,8 +80,6 @@
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.50",
-    "@opentui/core": "^0.1.77",
-    "@opentui/solid": "^0.1.77",
     "@slack/bolt": "^4.6.0",
     "@types/yargs": "^17.0.35",
     "chalk": "^5.3.0",
@@ -89,7 +87,6 @@
     "dotenv": "^16.4.5",
     "mixpanel-browser": "^2.75.0",
     "node-pty": "^1.1.0",
-    "solid-js": "^1.9.9",
     "yargs": "^18.0.0"
   },
   "devDependencies": {

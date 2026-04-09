@@ -67,14 +67,14 @@ describe('BridgeMessageRouter delivery failure', () => {
   const project = {
     projectName: 'test',
     projectPath: '/test/path',
-    tmuxSession: 'bridge',
+    runtimeSession: 'bridge',
     discordChannels: { claude: 'ch-1' },
     agents: { claude: true },
     instances: {
       claude: {
         instanceId: 'claude',
         agentType: 'claude',
-        tmuxWindow: 'test-claude',
+        runtimeWindow: 'test-claude',
         channelId: 'ch-1',
       },
     },

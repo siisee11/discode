@@ -158,7 +158,7 @@ describe('HookRuntimeRoutes — handleRuntimeEnsure', () => {
     });
 
     it('returns 404 when instance is not found', () => {
-      const project = { name: 'proj', projectPath: '/tmp/proj', tmuxSession: 'sess' };
+      const project = { name: 'proj', projectPath: '/tmp/proj', runtimeSession: 'sess' };
       const deps = createDeps();
       (deps.stateManager.getProject as any).mockReturnValue(project);
       (normalizeProjectState as any).mockReturnValue(project);
@@ -171,8 +171,8 @@ describe('HookRuntimeRoutes — handleRuntimeEnsure', () => {
     });
 
     it('returns 404 when agent adapter is not found', () => {
-      const instance = { instanceId: 'opencode', agentType: 'opencode', tmuxWindow: 'win1', channelId: 'ch-1' };
-      const project = { name: 'proj', projectPath: '/tmp/proj', tmuxSession: 'sess', instances: { opencode: instance } };
+      const instance = { instanceId: 'opencode', agentType: 'opencode', runtimeWindow: 'win1', channelId: 'ch-1' };
+      const project = { name: 'proj', projectPath: '/tmp/proj', runtimeSession: 'sess', instances: { opencode: instance } };
       const deps = createDeps();
       (deps.stateManager.getProject as any).mockReturnValue(project);
       (normalizeProjectState as any).mockReturnValue(project);
@@ -185,9 +185,9 @@ describe('HookRuntimeRoutes — handleRuntimeEnsure', () => {
       expect(result).toEqual({ status: 404, message: 'Agent adapter not found' });
     });
 
-    it('returns 400 when tmuxWindow or tmuxSession is missing', () => {
-      const instance = { instanceId: 'opencode', agentType: 'opencode', tmuxWindow: undefined, channelId: 'ch-1' };
-      const project = { name: 'proj', projectPath: '/tmp/proj', tmuxSession: 'sess', instances: { opencode: instance } };
+    it('returns 400 when runtimeWindow or runtimeSession is missing', () => {
+      const instance = { instanceId: 'opencode', agentType: 'opencode', runtimeWindow: undefined, channelId: 'ch-1' };
+      const project = { name: 'proj', projectPath: '/tmp/proj', runtimeSession: 'sess', instances: { opencode: instance } };
       const deps = createDeps();
       (deps.stateManager.getProject as any).mockReturnValue(project);
       (normalizeProjectState as any).mockReturnValue(project);
@@ -205,8 +205,8 @@ describe('HookRuntimeRoutes — handleRuntimeEnsure', () => {
     });
 
     it('returns 200 when window already exists without starting agent', () => {
-      const instance = { instanceId: 'opencode', agentType: 'opencode', tmuxWindow: 'win1', channelId: 'ch-1' };
-      const project = { name: 'proj', projectPath: '/tmp/proj', tmuxSession: 'sess', instances: { opencode: instance } };
+      const instance = { instanceId: 'opencode', agentType: 'opencode', runtimeWindow: 'win1', channelId: 'ch-1' };
+      const project = { name: 'proj', projectPath: '/tmp/proj', runtimeSession: 'sess', instances: { opencode: instance } };
       const runtime = createMockRuntime({
         windowExists: vi.fn().mockReturnValue(true),
       });
@@ -229,8 +229,8 @@ describe('HookRuntimeRoutes — handleRuntimeEnsure', () => {
     });
 
     it('starts agent in window when window does not exist', () => {
-      const instance = { instanceId: 'opencode', agentType: 'opencode', tmuxWindow: 'win1', channelId: 'ch-1' };
-      const project = { name: 'proj', projectPath: '/tmp/proj', tmuxSession: 'sess', instances: { opencode: instance } };
+      const instance = { instanceId: 'opencode', agentType: 'opencode', runtimeWindow: 'win1', channelId: 'ch-1' };
+      const project = { name: 'proj', projectPath: '/tmp/proj', runtimeSession: 'sess', instances: { opencode: instance } };
       const runtime = createMockRuntime({
         windowExists: vi.fn().mockReturnValue(false),
       });
@@ -266,8 +266,8 @@ describe('HookRuntimeRoutes — handleRuntimeEnsure', () => {
     });
 
     it('looks up instance by instanceId when provided', () => {
-      const instance = { instanceId: 'opencode-2', agentType: 'opencode', tmuxWindow: 'win2', channelId: 'ch-2' };
-      const project = { name: 'proj', projectPath: '/tmp/proj', tmuxSession: 'sess', instances: { 'opencode-2': instance } };
+      const instance = { instanceId: 'opencode-2', agentType: 'opencode', runtimeWindow: 'win2', channelId: 'ch-2' };
+      const project = { name: 'proj', projectPath: '/tmp/proj', runtimeSession: 'sess', instances: { 'opencode-2': instance } };
       const runtime = createMockRuntime({
         windowExists: vi.fn().mockReturnValue(true),
       });
@@ -292,8 +292,8 @@ describe('HookRuntimeRoutes — handleRuntimeEnsure', () => {
     });
 
     it('passes permissionAllow to adapter.getExtraEnvVars', () => {
-      const instance = { instanceId: 'opencode', agentType: 'opencode', tmuxWindow: 'win1', channelId: 'ch-1' };
-      const project = { name: 'proj', projectPath: '/tmp/proj', tmuxSession: 'sess', instances: { opencode: instance } };
+      const instance = { instanceId: 'opencode', agentType: 'opencode', runtimeWindow: 'win1', channelId: 'ch-1' };
+      const project = { name: 'proj', projectPath: '/tmp/proj', runtimeSession: 'sess', instances: { opencode: instance } };
       const runtime = createMockRuntime({
         windowExists: vi.fn().mockReturnValue(false),
       });

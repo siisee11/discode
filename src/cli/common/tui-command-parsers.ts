@@ -115,7 +115,7 @@ export function parseNewCommand(raw: string): ParsedNewCommand {
 export type ParsedOnboardCommand = {
   options: {
     platform?: 'discord' | 'slack';
-    runtimeMode?: 'tmux' | 'pty-rust';
+    runtimeMode?: 'pty-rust';
     token?: string;
     slackBotToken?: string;
     slackAppToken?: string;
@@ -173,10 +173,10 @@ export function parseOnboardCommand(raw: string): ParsedOnboardCommand {
 
     if (flag === '--runtime-mode') {
       const value = (readValue() || '').toLowerCase();
-      if (value !== 'tmux' && value !== 'pty-rust') {
-        return { options, error: 'runtime mode must be tmux or pty-rust.' };
+      if (value !== 'pty-rust') {
+        return { options, error: 'runtime mode must be pty-rust.' };
       }
-      options.runtimeMode = value;
+      options.runtimeMode = 'pty-rust';
       continue;
     }
 

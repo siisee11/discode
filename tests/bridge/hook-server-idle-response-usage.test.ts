@@ -42,7 +42,7 @@ describe('BridgeHookServer — idle response handling', () => {
       test: {
         projectName: 'test',
         projectPath: tempDir,
-        tmuxSession: 'bridge',
+        runtimeSession: 'bridge',
         agents: { claude: true },
         discordChannels: { claude: 'ch-123' },
         instances: {
@@ -67,7 +67,7 @@ describe('BridgeHookServer — idle response handling', () => {
       test: {
         projectName: 'test',
         projectPath: tempDir,
-        tmuxSession: 'bridge',
+        runtimeSession: 'bridge',
         agents: { claude: true },
         discordChannels: { claude: 'ch-123' },
         instances: {
@@ -117,7 +117,7 @@ describe('BridgeHookServer — idle response handling', () => {
       test: {
         projectName: 'test',
         projectPath: tempDir,
-        tmuxSession: 'bridge',
+        runtimeSession: 'bridge',
         agents: { claude: true },
         discordChannels: { claude: 'ch-123' },
         instances: {
@@ -167,7 +167,7 @@ describe('BridgeHookServer — idle response handling', () => {
       test: {
         projectName: 'test',
         projectPath: tempDir,
-        tmuxSession: 'bridge',
+        runtimeSession: 'bridge',
         agents: { claude: true },
         discordChannels: { claude: 'ch-123' },
         instances: {
@@ -207,7 +207,7 @@ describe('BridgeHookServer — idle response handling', () => {
       test: {
         projectName: 'test',
         projectPath: tempDir,
-        tmuxSession: 'bridge',
+        runtimeSession: 'bridge',
         agents: { claude: true },
         discordChannels: { claude: 'ch-123' },
         instances: {

@@ -65,7 +65,7 @@ function createClaudeProject() {
   return {
     projectName: 'myapp',
     projectPath: '/home/user/myapp',
-    tmuxSession: 'bridge',
+    runtimeSession: 'bridge',
     agents: { claude: true },
     discordChannels: { claude: 'ch-claude' },
     instances: {
@@ -73,7 +73,7 @@ function createClaudeProject() {
         instanceId: 'claude',
         agentType: 'claude',
         channelId: 'ch-claude',
-        tmuxWindow: 'myapp-claude',
+        runtimeWindow: 'myapp-claude',
       },
     },
     createdAt: new Date(),
@@ -85,14 +85,14 @@ function createOpencodeContainerProject() {
   return {
     projectName: 'discode',
     projectPath: '/Users/gui/discode',
-    tmuxSession: 'bridge',
+    runtimeSession: 'bridge',
     agents: { opencode: true },
     discordChannels: { opencode: 'ch-opencode' },
     instances: {
       opencode: {
         instanceId: 'opencode',
         agentType: 'opencode',
-        tmuxWindow: 'discode-opencode',
+        runtimeWindow: 'discode-opencode',
         channelId: 'ch-opencode',
         eventHook: true,
         containerMode: true,
@@ -109,7 +109,7 @@ function createMultiAgentProject() {
   return {
     projectName: 'multi',
     projectPath: '/home/user/multi',
-    tmuxSession: 'bridge',
+    runtimeSession: 'bridge',
     agents: { claude: true, gemini: true },
     discordChannels: { claude: 'ch-claude', gemini: 'ch-gemini' },
     instances: {
@@ -117,13 +117,13 @@ function createMultiAgentProject() {
         instanceId: 'claude',
         agentType: 'claude',
         channelId: 'ch-claude',
-        tmuxWindow: 'multi-claude',
+        runtimeWindow: 'multi-claude',
       },
       gemini: {
         instanceId: 'gemini',
         agentType: 'gemini',
         channelId: 'ch-gemini',
-        tmuxWindow: 'multi-gemini',
+        runtimeWindow: 'multi-gemini',
       },
     },
     createdAt: new Date(),
@@ -270,7 +270,7 @@ describe('BridgeProjectBootstrap', () => {
       const project = {
         projectName: 'custom',
         projectPath: '/test/custom',
-        tmuxSession: 'bridge',
+        runtimeSession: 'bridge',
         agents: { myCustomAgent: true },
         discordChannels: { myCustomAgent: 'ch-custom' },
         instances: {

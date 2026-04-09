@@ -14,6 +14,8 @@ import { buildAgentLaunchEnv, buildExportPrefix, readHookToken } from '../policy
 import {
   getPrimaryInstanceForAgent,
   getProjectInstance,
+  getProjectRuntimeSession,
+  getInstanceRuntimeWindow,
   listProjectInstances,
   normalizeProjectState,
 } from '../state/instances.js';
@@ -151,8 +153,8 @@ export class HookRuntimeRoutes {
     const adapter = agentRegistry.get(instance.agentType);
     if (!adapter) return { status: 404, message: 'Agent adapter not found' };
 
-    const windowName = instance.tmuxWindow;
-    const sessionName = project.tmuxSession;
+    const windowName = getInstanceRuntimeWindow(instance);
+    const sessionName = getProjectRuntimeSession(project);
     if (!windowName || !sessionName) return { status: 400, message: 'Invalid project state' };
 
     this.deps.runtime.setSessionEnv(sessionName, 'DISCODE_PORT', String(this.deps.port));

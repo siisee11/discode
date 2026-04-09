@@ -6,7 +6,7 @@ function createProject(overrides?: Partial<ProjectState>): ProjectState {
   return {
     projectName: 'my-project',
     projectPath: '/tmp/project',
-    tmuxSession: 'agent-bridge',
+    runtimeSession: 'agent-bridge',
     agents: { claude: true },
     discordChannels: { claude: 'ch-1' },
     createdAt: new Date(),
@@ -32,7 +32,7 @@ describe('window naming policy', () => {
         claude: {
           instanceId: 'claude',
           agentType: 'claude',
-          tmuxWindow: 'explicit-window',
+          runtimeWindow: 'explicit-window',
         },
       },
     });

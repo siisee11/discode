@@ -32,7 +32,7 @@ export interface SlackConfig {
 }
 
 export type MessagingPlatform = 'discord' | 'slack';
-export type RuntimeMode = 'tmux' | 'pty-rust';
+export type RuntimeMode = 'pty-rust';
 
 export interface BridgeConfig {
   discord: DiscordConfig;
@@ -80,7 +80,8 @@ export interface ProjectAgents {
 export interface ProjectInstanceState {
   instanceId: string;
   agentType: string;
-  tmuxWindow?: string;
+  /** Canonical runtime window target for this instance. */
+  runtimeWindow?: string;
   /** Platform-agnostic channel ID (Discord channel ID or Slack channel ID). */
   channelId?: string;
   eventHook?: boolean;
@@ -90,8 +91,8 @@ export interface ProjectInstanceState {
   containerId?: string;
   /** Docker container name for display/logging. */
   containerName?: string;
-  /** Runtime type: 'tmux' (default) or 'sdk' (in-process Claude Agent SDK). */
-  runtimeType?: 'tmux' | 'sdk';
+  /** Runtime type for this instance. */
+  runtimeType?: 'pty-rust' | 'sdk';
   /** SDK conversation session ID for multi-turn continuation. */
   sdkSessionId?: string;
 }
@@ -99,7 +100,8 @@ export interface ProjectInstanceState {
 export interface ProjectState {
   projectName: string;
   projectPath: string;
-  tmuxSession: string;
+  /** Canonical runtime session name for the project. */
+  runtimeSession?: string;
   /**
    * Multi-instance state keyed by instance ID.
    *
@@ -119,7 +121,7 @@ export interface ProjectState {
    *
    * If omitted, agentType is treated as the window name (legacy behavior).
    */
-  tmuxWindows?: {
+  runtimeWindows?: {
     [agentType: string]: string | undefined;
   };
   /**

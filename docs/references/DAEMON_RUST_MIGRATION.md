@@ -94,14 +94,13 @@ Config loader (`src/config/index.ts`):
 - file path: `~/.discode/config.json`
 - precedence: stored config > environment > defaults
 - unknown or invalid values are ignored (safe fallback)
-- runtime mode is normalized to `tmux | pty-rust`; unsupported values fall back to `tmux`
+- runtime mode is normalized to `pty-rust`
 
 State loader (`src/state/index.ts`, `src/state/instances.ts`):
 
 - file path: `~/.discode/state.json`
 - each project is normalized through `normalizeProjectState`
-- supports legacy per-agent maps (`agents`, `discordChannels`, `tmuxWindows`, `eventHooks`)
-- supports legacy instance field alias `discordChannelId` -> `channelId`
+- uses canonical runtime fields (`runtimeSession`, `runtimeWindows`) for persisted state and runtime restoration
 - `setProject` always persists normalized state
 
 ### Telemetry and logging compatibility policy
@@ -177,23 +176,20 @@ Config compatibility behavior (`CompatConfig`):
 
 - loads `~/.discode/config.json` (or configured state dir) with TS-like fallback (`{}` when missing/invalid)
 - keeps raw JSON fields intact for roundtrip safety
-- provides TS-aligned runtime mode normalization (`pty-rust` else `tmux`)
+- provides TS-aligned runtime mode normalization (`pty-rust`)
 
 State compatibility behavior (`CompatState`):
 
 - loads `~/.discode/state.json` with TS-like fallback (`{}` then normalized to include `projects`)
-- ports legacy instance normalization from TS:
-  - derives `instances` from legacy maps when needed
-  - supports `discordChannelId` -> `channelId` alias
-  - re-derives legacy maps (`agents`, `discordChannels`, `tmuxWindows`, `eventHooks`) from normalized instances
+- derives `instances` from canonical project maps when needed
+- re-derives compatibility maps (`agents`, `discordChannels`, `eventHooks`) from normalized instances and writes canonical runtime fields
 - preserves unknown root/project/instance fields during normalization/write
 
 Compatibility tests:
 
 - `cargo test --manifest-path daemon-rs/Cargo.toml`
 - includes migration/roundtrip tests in `daemon-rs/src/compat.rs` for:
-  - legacy map -> instances normalization
-  - legacy `discordChannelId` alias
+  - canonical map -> instances normalization
   - config/state unknown-field roundtrip preservation
 
 ## B3 hook server and ingestion bootstrap (current implementation)

@@ -38,7 +38,7 @@ describe('BridgeHookServer — new hooks (prompt.submit, tool.failure, teammate.
       test: {
         projectName: 'test',
         projectPath: tempDir,
-        tmuxSession: 'bridge',
+        runtimeSession: 'bridge',
         agents: { claude: true },
         discordChannels: { claude: 'ch-123' },
         instances: {
@@ -98,7 +98,7 @@ describe('BridgeHookServer — new hooks (prompt.submit, tool.failure, teammate.
       test: {
         projectName: 'test',
         projectPath: tempDir,
-        tmuxSession: 'bridge',
+        runtimeSession: 'bridge',
         agents: { opencode: true },
         discordChannels: { opencode: 'ch-opencode' },
         instances: {

@@ -172,24 +172,24 @@ describe('ConfigManager', () => {
       expect(managerFromStored.config.runtimeMode).toBe('pty-rust');
     });
 
-    it('falls back to tmux for unsupported runtime mode values', () => {
+    it('falls back to pty-rust for unsupported runtime mode values', () => {
       const storage = new MockStorage();
       const env = new MockEnvironment();
       env.set('DISCODE_RUNTIME_MODE', 'pty');
 
       const managerFromEnv = new ConfigManager(storage, env, configDir);
-      expect(managerFromEnv.config.runtimeMode).toBe('tmux');
+      expect(managerFromEnv.config.runtimeMode).toBe('pty-rust');
 
       storage.setFile(configFile, JSON.stringify({ runtimeMode: 'pty-ts' }));
       const managerFromStoredLegacyTs = new ConfigManager(storage, env, configDir);
-      expect(managerFromStoredLegacyTs.config.runtimeMode).toBe('tmux');
+      expect(managerFromStoredLegacyTs.config.runtimeMode).toBe('pty-rust');
 
       storage.setFile(
         configFile,
         JSON.stringify(loadCompatFixture('config-legacy-runtime-mode.json')),
       );
       const managerFromStored = new ConfigManager(storage, env, configDir);
-      expect(managerFromStored.config.runtimeMode).toBe('tmux');
+      expect(managerFromStored.config.runtimeMode).toBe('pty-rust');
     });
 
     it('preserves unknown fields from compat fixture when saving updates', () => {

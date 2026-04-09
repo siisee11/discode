@@ -58,14 +58,14 @@ function createProject() {
   return normalizeProjectState({
     projectName: 'myapp',
     projectPath: '/home/user/myapp',
-    tmuxSession: 'bridge',
+    runtimeSession: 'bridge',
     discordChannels: { claude: 'ch-1' },
     agents: { claude: true },
     instances: {
       claude: {
         instanceId: 'claude',
         agentType: 'claude',
-        tmuxWindow: 'myapp-claude',
+        runtimeWindow: 'myapp-claude',
         channelId: 'ch-1',
       },
     },
@@ -78,20 +78,20 @@ function createMultiInstanceProject() {
   return normalizeProjectState({
     projectName: 'myapp',
     projectPath: '/home/user/myapp',
-    tmuxSession: 'bridge',
+    runtimeSession: 'bridge',
     discordChannels: { claude: 'ch-1', 'claude-2': 'ch-2' },
     agents: { claude: true },
     instances: {
       claude: {
         instanceId: 'claude',
         agentType: 'claude',
-        tmuxWindow: 'myapp-claude',
+        runtimeWindow: 'myapp-claude',
         channelId: 'ch-1',
       },
       'claude-2': {
         instanceId: 'claude-2',
         agentType: 'claude',
-        tmuxWindow: 'myapp-claude-2',
+        runtimeWindow: 'myapp-claude-2',
         channelId: 'ch-2',
       },
     },

@@ -6,7 +6,7 @@ const mockSaveConfig = vi.hoisted(() => vi.fn());
 const mockConfig = vi.hoisted(() => ({
   defaultAgentCli: 'claude',
   discord: { channelId: '' },
-  runtimeMode: 'tmux' as 'tmux' | 'pty-rust',
+  runtimeMode: 'pty-rust' as 'pty-rust',
 }));
 
 vi.mock('../../../src/config/index.js', () => ({
@@ -49,7 +49,7 @@ describe('handleConfigShow', () => {
     append = (line: string) => lines.push(line);
     mockConfig.defaultAgentCli = 'claude';
     mockConfig.discord.channelId = '';
-    mockConfig.runtimeMode = 'tmux';
+    mockConfig.runtimeMode = 'pty-rust';
   });
 
   it('shows keepChannel off', () => {
@@ -80,7 +80,7 @@ describe('handleConfigShow', () => {
   it('shows runtimeMode', () => {
     const deps = createMockDeps();
     handleConfigShow(append, deps);
-    expect(lines[3]).toContain('runtimeMode: tmux');
+    expect(lines[3]).toContain('runtimeMode: pty-rust');
   });
 
   it('returns "handled"', () => {
@@ -99,7 +99,7 @@ describe('handleConfigSet', () => {
     vi.clearAllMocks();
     mockConfig.defaultAgentCli = 'claude';
     mockConfig.discord.channelId = '';
-    mockConfig.runtimeMode = 'tmux';
+    mockConfig.runtimeMode = 'pty-rust';
   });
 
   describe('keepChannel', () => {
@@ -211,20 +211,6 @@ describe('handleConfigSet', () => {
       expect(lines[0]).toContain('runtimeMode is now pty-rust');
     });
 
-    it('toggles runtimeMode from tmux to pty-rust', () => {
-      mockConfig.runtimeMode = 'tmux';
-      const deps = createMockDeps();
-      handleConfigSet('/config runtimeMode toggle', append, deps);
-      expect(mockSaveConfig).toHaveBeenCalledWith({ runtimeMode: 'pty-rust' });
-    });
-
-    it('toggles runtimeMode from pty-rust to tmux', () => {
-      mockConfig.runtimeMode = 'pty-rust';
-      const deps = createMockDeps();
-      handleConfigSet('/config runtimeMode toggle', append, deps);
-      expect(mockSaveConfig).toHaveBeenCalledWith({ runtimeMode: 'tmux' });
-    });
-
     it('shows error for unknown runtime mode', () => {
       const deps = createMockDeps();
       handleConfigSet('/config runtimeMode screen', append, deps);
@@ -234,7 +220,7 @@ describe('handleConfigSet', () => {
     it('shows current value when no argument', () => {
       const deps = createMockDeps();
       handleConfigSet('/config runtimeMode', append, deps);
-      expect(lines[0]).toContain('runtimeMode: tmux');
+      expect(lines[0]).toContain('runtimeMode: pty-rust');
     });
 
     it('accepts runtime-mode key alias', () => {
@@ -249,6 +235,12 @@ describe('handleConfigSet', () => {
       expect(lines[0]).toContain('Unknown runtime mode');
       handleConfigSet('/config runtimeMode pty-ts', append, deps);
       expect(lines[2]).toContain('Unknown runtime mode');
+    });
+
+    it('rejects removed tmux runtime mode', () => {
+      const deps = createMockDeps();
+      handleConfigSet('/config runtimeMode tmux', append, deps);
+      expect(lines[0]).toContain('Unknown runtime mode');
     });
   });
 

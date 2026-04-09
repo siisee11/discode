@@ -1,6 +1,5 @@
 import { config, saveConfig } from '../../config/index.js';
 import { agentRegistry } from '../../agents/index.js';
-import type { RuntimeMode } from '../../types/index.js';
 import type { TuiCommandDeps } from './tui-command-handler.js';
 
 export function handleConfigShow(append: (line: string) => void, deps: TuiCommandDeps): 'handled' {
@@ -8,11 +7,11 @@ export function handleConfigShow(append: (line: string) => void, deps: TuiComman
   append(`keepChannel: ${keepChannelOnStop ? 'on' : 'off'}`);
   append(`defaultAgent: ${config.defaultAgentCli || '(auto)'}`);
   append(`defaultChannel: ${config.discord.channelId || '(auto)'}`);
-  append(`runtimeMode: ${config.runtimeMode || 'tmux'}`);
+  append('runtimeMode: pty-rust');
   append('Usage: /config keepChannel [on|off|toggle]');
   append('Usage: /config defaultAgent [agent|auto]');
   append('Usage: /config defaultChannel [channelId|auto]');
-  append('Usage: /config runtimeMode [tmux|pty-rust|toggle]');
+  append('Usage: /config runtimeMode [pty-rust]');
   return 'handled';
 }
 
@@ -105,29 +104,23 @@ function handleConfigDefaultChannel(parts: string[], append: (line: string) => v
 }
 
 function handleConfigRuntimeMode(parts: string[], append: (line: string) => void): 'handled' {
-  const currentMode = config.runtimeMode || 'tmux';
   const value = (parts[2] || '').trim().toLowerCase();
 
   if (!value) {
-    append(`runtimeMode: ${currentMode}`);
-    append('Use: /config runtimeMode [tmux|pty-rust|toggle]');
+    append('runtimeMode: pty-rust');
+    append('Use: /config runtimeMode [pty-rust]');
     return 'handled';
   }
 
-  let nextMode: RuntimeMode;
-  if (value === 'toggle') {
-    nextMode = currentMode === 'tmux' ? 'pty-rust' : 'tmux';
-  } else if (value === 'tmux' || value === 'pty-rust') {
-    nextMode = value;
-  } else {
+  if (value !== 'pty-rust') {
     append(`⚠️ Unknown runtime mode: ${parts[2]}`);
-    append('Use tmux, pty-rust, or toggle');
+    append('Use pty-rust');
     return 'handled';
   }
 
   try {
-    saveConfig({ runtimeMode: nextMode });
-    append(`✅ runtimeMode is now ${nextMode}`);
+    saveConfig({ runtimeMode: 'pty-rust' });
+    append('✅ runtimeMode is now pty-rust');
   } catch (error) {
     append(`⚠️ Failed to persist config: ${error instanceof Error ? error.message : String(error)}`);
   }

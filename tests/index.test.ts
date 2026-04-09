@@ -96,6 +96,7 @@ function createMockMessaging() {
 function createMockTmux() {
   return {
     getOrCreateSession: vi.fn().mockReturnValue('agent-test'),
+    windowExists: vi.fn().mockReturnValue(true),
     createWindow: vi.fn(),
     sendKeysToWindow: vi.fn(),
     typeKeysToWindow: vi.fn(),
@@ -151,7 +152,7 @@ describe('AgentBridge', () => {
     it('returns null for empty string', () => {
       const bridge = new AgentBridge({
         messaging: createMockMessaging(),
-        tmux: createMockTmux(),
+        runtime: createMockTmux(),
         stateManager: createMockStateManager(),
         registry: createMockRegistry(),
         config: createMockConfig(),
@@ -163,7 +164,7 @@ describe('AgentBridge', () => {
     it('returns null for whitespace-only string', () => {
       const bridge = new AgentBridge({
         messaging: createMockMessaging(),
-        tmux: createMockTmux(),
+        runtime: createMockTmux(),
         stateManager: createMockStateManager(),
         registry: createMockRegistry(),
         config: createMockConfig(),
@@ -175,7 +176,7 @@ describe('AgentBridge', () => {
     it('returns null for string > 10000 chars', () => {
       const bridge = new AgentBridge({
         messaging: createMockMessaging(),
-        tmux: createMockTmux(),
+        runtime: createMockTmux(),
         stateManager: createMockStateManager(),
         registry: createMockRegistry(),
         config: createMockConfig(),
@@ -188,7 +189,7 @@ describe('AgentBridge', () => {
     it('strips null bytes', () => {
       const bridge = new AgentBridge({
         messaging: createMockMessaging(),
-        tmux: createMockTmux(),
+        runtime: createMockTmux(),
         stateManager: createMockStateManager(),
         registry: createMockRegistry(),
         config: createMockConfig(),
@@ -201,7 +202,7 @@ describe('AgentBridge', () => {
     it('returns valid content unchanged', () => {
       const bridge = new AgentBridge({
         messaging: createMockMessaging(),
-        tmux: createMockTmux(),
+        runtime: createMockTmux(),
         stateManager: createMockStateManager(),
         registry: createMockRegistry(),
         config: createMockConfig(),
@@ -222,7 +223,7 @@ describe('AgentBridge', () => {
 
       const bridge = new AgentBridge({
         messaging: mockMessaging,
-        tmux: mockTmux,
+        runtime: mockTmux,
         stateManager: mockStateManager,
         registry: mockRegistry,
         config: mockConfig,
@@ -235,7 +236,7 @@ describe('AgentBridge', () => {
       // Just verify the class is constructable with mocked deps
       const bridge = new AgentBridge({
         messaging: createMockMessaging(),
-        tmux: createMockTmux(),
+        runtime: createMockTmux(),
         stateManager: createMockStateManager(),
         registry: createMockRegistry(),
         config: createMockConfig(),
@@ -260,7 +261,7 @@ describe('AgentBridge', () => {
       mockRegistry = createMockRegistry();
       bridge = new AgentBridge({
         messaging: mockMessaging,
-        tmux: mockTmux,
+        runtime: mockTmux,
         stateManager: mockStateManager,
         registry: mockRegistry,
         config: createMockConfig(),
@@ -286,7 +287,7 @@ describe('AgentBridge', () => {
         expect.objectContaining({
           projectName: 'test-project',
           projectPath: '/test/path',
-          tmuxSession: 'agent-test',
+          runtimeSession: 'agent-test',
           eventHooks: { claude: true },
         })
       );
@@ -299,7 +300,7 @@ describe('AgentBridge', () => {
         channelName: 'test-project-claude',
         channelId: 'ch-123',
         agentName: 'Claude Code',
-        tmuxSession: 'agent-test',
+        runtimeSession: 'agent-test',
       });
     });
 
@@ -321,7 +322,7 @@ describe('AgentBridge', () => {
 
       bridge = new AgentBridge({
         messaging: mockMessaging,
-        tmux: mockTmux,
+        runtime: mockTmux,
         stateManager: mockStateManager,
         registry: mockRegistry,
         config: {
@@ -342,7 +343,7 @@ describe('AgentBridge', () => {
     it('adds claude skip-permissions flag when permission mode is allow', async () => {
       bridge = new AgentBridge({
         messaging: mockMessaging,
-        tmux: mockTmux,
+        runtime: mockTmux,
         stateManager: mockStateManager,
         registry: mockRegistry,
         config: {
@@ -379,7 +380,7 @@ describe('AgentBridge', () => {
       const mockRuntime = createMockTmux();
       const bridge = new AgentBridge({
         messaging: mockMessaging,
-        tmux: mockRuntime,
+        runtime: mockRuntime,
         stateManager: createMockStateManager(),
         registry: createMockRegistry(),
         config: createMockConfig(),

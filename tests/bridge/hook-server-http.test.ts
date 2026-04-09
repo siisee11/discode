@@ -154,14 +154,14 @@ describe('BridgeHookServer — HTTP infra + runtime API', () => {
         test: {
           projectName: 'test',
           projectPath: tempDir,
-          tmuxSession: 'bridge',
+          runtimeSession: 'bridge',
           createdAt: new Date().toISOString(),
           lastActive: new Date().toISOString(),
           instances: {
             opencode: {
               instanceId: 'opencode',
               agentType: 'opencode',
-              tmuxWindow: 'test-opencode',
+              runtimeWindow: 'test-opencode',
               channelId: 'C123',
             },
           },

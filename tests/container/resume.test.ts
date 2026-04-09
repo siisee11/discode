@@ -69,14 +69,14 @@ describe('resumeProjectInstance with container mode', () => {
     const project: ProjectState = {
       projectName: 'test',
       projectPath: '/test',
-      tmuxSession: 'bridge',
+      runtimeSession: 'bridge',
       discordChannels: { claude: 'ch-1' },
       agents: { claude: true },
       instances: {
         claude: {
           instanceId: 'claude',
           agentType: 'claude',
-          tmuxWindow: 'test-claude',
+          runtimeWindow: 'test-claude',
           channelId: 'ch-1',
           containerMode: true,
           containerId: 'container-abc',
@@ -119,14 +119,14 @@ describe('resumeProjectInstance with container mode', () => {
     const project: ProjectState = {
       projectName: 'test',
       projectPath: '/test',
-      tmuxSession: 'bridge',
+      runtimeSession: 'bridge',
       discordChannels: { claude: 'ch-1' },
       agents: { claude: true },
       instances: {
         claude: {
           instanceId: 'claude',
           agentType: 'claude',
-          tmuxWindow: 'test-claude',
+          runtimeWindow: 'test-claude',
           channelId: 'ch-1',
           containerMode: true,
           containerId: 'container-gone',
@@ -164,14 +164,14 @@ describe('resumeProjectInstance with container mode', () => {
     const project: ProjectState = {
       projectName: 'test',
       projectPath: '/test',
-      tmuxSession: 'bridge',
+      runtimeSession: 'bridge',
       discordChannels: { claude: 'ch-1' },
       agents: { claude: true },
       instances: {
         claude: {
           instanceId: 'claude',
           agentType: 'claude',
-          tmuxWindow: 'test-claude',
+          runtimeWindow: 'test-claude',
           channelId: 'ch-1',
           // No containerMode
         },

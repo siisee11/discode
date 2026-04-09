@@ -1,18 +1,9 @@
 import chalk from 'chalk';
 import { ensureDaemonRunning, getDaemonStatus, stopDaemon } from '../../app/daemon-service.js';
-import { config } from '../../config/index.js';
-import { ensureTmuxInstalled } from '../common/tmux.js';
-import { isPtyRuntimeMode } from '../../runtime/mode.js';
 
 export async function daemonCommand(action: string) {
-  const runtimeMode = config.runtimeMode || 'tmux';
-  const requiresTmux = !isPtyRuntimeMode(runtimeMode);
-
   switch (action) {
     case 'start': {
-      if (requiresTmux) {
-        ensureTmuxInstalled();
-      }
       const result = await ensureDaemonRunning();
       if (result.alreadyRunning) {
         console.log(chalk.green(`✅ Daemon already running (port ${result.port})`));
@@ -31,10 +22,6 @@ export async function daemonCommand(action: string) {
       break;
     }
     case 'restart': {
-      if (requiresTmux) {
-        ensureTmuxInstalled();
-      }
-
       const stopped = stopDaemon();
       if (stopped) {
         console.log(chalk.gray('🔄 Daemon stopped. Starting again...'));

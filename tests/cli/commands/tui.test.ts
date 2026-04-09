@@ -5,35 +5,21 @@ const mocks = vi.hoisted(() => {
   const fetchWindows = vi.fn().mockResolvedValue(null);
   const disconnect = vi.fn();
   const focusWindow = vi.fn().mockResolvedValue(false);
-  const ensureConnected = vi.fn().mockResolvedValue(false);
-  const getTransportStatus = vi.fn().mockReturnValue({
-    mode: 'stream',
-    connected: false,
-    detail: 'stream disconnected',
-  });
-  const runTui = vi.fn().mockResolvedValue(undefined);
+  const spawnSync = vi.fn().mockReturnValue({ status: 0 });
 
   return {
     connect,
     fetchWindows,
     disconnect,
     focusWindow,
-    ensureConnected,
-    getTransportStatus,
-    runTui,
+    spawnSync,
   };
 });
-
-vi.mock('@opentui/solid/preload', () => ({}));
-
-vi.mock('../../../bin/tui.tsx', () => ({
-  runTui: mocks.runTui,
-}));
 
 vi.mock('../../../src/config/index.js', () => ({
   config: {
     hookServerPort: 18470,
-    runtimeMode: 'tmux',
+    runtimeMode: 'pty-rust',
     tmux: {
       sessionPrefix: '',
       sharedSessionName: 'bridge',
@@ -81,7 +67,13 @@ vi.mock('../../../src/state/instances.js', () => ({
 }));
 
 vi.mock('../../../src/app/daemon-service.js', () => ({
-  ensureDaemonRunning: vi.fn(),
+  ensureDaemonRunning: vi.fn().mockResolvedValue({
+    alreadyRunning: false,
+    ready: true,
+    port: 18470,
+    logFile: '/tmp/daemon.log',
+    backend: 'rust',
+  }),
   getDaemonLogFilePath: vi.fn().mockReturnValue('/tmp/daemon.log'),
   getDaemonStatus: vi.fn().mockResolvedValue({
     running: true,
@@ -91,10 +83,6 @@ vi.mock('../../../src/app/daemon-service.js', () => ({
     backend: 'rust',
   }),
   restartDaemonIfRunning: vi.fn(),
-}));
-
-vi.mock('../../../src/runtime/mode.js', () => ({
-  isPtyRuntimeMode: (value: string | undefined) => value === 'pty-rust',
 }));
 
 vi.mock('../../../src/cli/common/tmux.js', () => ({
@@ -111,49 +99,32 @@ vi.mock('../../../src/cli/common/runtime-session-manager.js', () => ({
     fetchWindows = mocks.fetchWindows;
     disconnect = mocks.disconnect;
     focusWindow = mocks.focusWindow;
-    ensureConnected = mocks.ensureConnected;
-    getTransportStatus = mocks.getTransportStatus;
-
-    isSupported(): boolean | undefined {
-      return undefined;
-    }
-
-    readWindowOutput(): Promise<string | undefined> {
-      return Promise.resolve(undefined);
-    }
-
-    sendRawKey(): Promise<void> {
-      return Promise.resolve();
-    }
-
-    sendResize(): Promise<void> {
-      return Promise.resolve();
-    }
-
-    registerFrameListener(): () => void {
-      return () => {};
-    }
   },
-}));
-
-vi.mock('../../../src/cli/commands/attach.js', () => ({
-  attachCommand: vi.fn(),
 }));
 
 vi.mock('../../../src/cli/commands/stop.js', () => ({
   stopCommand: vi.fn(),
 }));
 
+vi.mock('child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('child_process')>();
+  return {
+    ...actual,
+    spawnSync: mocks.spawnSync,
+  };
+});
+
 describe('tuiCommand', () => {
   const originalVersions = process.versions;
-  const originalTmux = process.env.TMUX;
-  const originalTmuxPane = process.env.TMUX_PANE;
+  const originalRuntimeClientBin = process.env.DISCODE_RUNTIME_CLIENT_BIN;
 
   beforeEach(() => {
     vi.clearAllMocks();
     vi.resetModules();
-    delete process.env.TMUX;
-    delete process.env.TMUX_PANE;
+    delete process.env.DISCODE_RUNTIME_CLIENT_BIN;
+    mocks.fetchWindows.mockResolvedValue(null);
+    mocks.focusWindow.mockResolvedValue(false);
+    mocks.spawnSync.mockReturnValue({ status: 0, error: undefined });
     Object.defineProperty(process, 'versions', {
       configurable: true,
       value: {
@@ -164,15 +135,10 @@ describe('tuiCommand', () => {
   });
 
   afterEach(() => {
-    if (originalTmux === undefined) {
-      delete process.env.TMUX;
+    if (originalRuntimeClientBin === undefined) {
+      delete process.env.DISCODE_RUNTIME_CLIENT_BIN;
     } else {
-      process.env.TMUX = originalTmux;
-    }
-    if (originalTmuxPane === undefined) {
-      delete process.env.TMUX_PANE;
-    } else {
-      process.env.TMUX_PANE = originalTmuxPane;
+      process.env.DISCODE_RUNTIME_CLIENT_BIN = originalRuntimeClientBin;
     }
     Object.defineProperty(process, 'versions', {
       configurable: true,
@@ -180,21 +146,41 @@ describe('tuiCommand', () => {
     });
   });
 
-  it('skips runtime stream connection for tmux mode', async () => {
+  it('uses the native Rust client when a runtime window is available', async () => {
+    process.env.DISCODE_RUNTIME_CLIENT_BIN = '/tmp/discode-runtime-client-test';
+    mocks.fetchWindows.mockResolvedValue({
+      activeWindowId: 'bridge:demo',
+      windows: [
+        { windowId: 'bridge:demo', sessionName: 'bridge', windowName: 'demo' },
+      ],
+    });
+    mocks.focusWindow.mockResolvedValue(true);
+    mocks.spawnSync.mockReturnValue({ status: 0, error: undefined });
+
     const { tuiCommand } = await import('../../../src/cli/commands/tui.js');
 
     await tuiCommand({});
 
-    expect(mocks.connect).not.toHaveBeenCalled();
-    expect(mocks.runTui).toHaveBeenCalledOnce();
+    expect(mocks.connect).toHaveBeenCalledOnce();
+    expect(mocks.spawnSync).toHaveBeenCalledWith(
+      '/tmp/discode-runtime-client-test',
+      ['--socket', expect.any(String), '--window-id', 'bridge:demo', '--daemon-port', '18470'],
+      { stdio: 'inherit' },
+    );
+    expect(mocks.disconnect).toHaveBeenCalledOnce();
+  });
 
-    const tuiInput = mocks.runTui.mock.calls[0]?.[0];
-    expect(tuiInput.runtimeMode).toBe('tmux');
-    await expect(tuiInput.getRuntimeStatus()).resolves.toEqual({
-      mode: 'stream',
-      connected: false,
-      detail: 'disabled for tmux runtime',
-    });
-    expect(mocks.ensureConnected).not.toHaveBeenCalled();
+  it('prints guidance when no runtime window is available', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    const { tuiCommand } = await import('../../../src/cli/commands/tui.js');
+
+    await tuiCommand({});
+
+    expect(mocks.connect).toHaveBeenCalledOnce();
+    expect(mocks.spawnSync).not.toHaveBeenCalled();
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('No active runtime window found.'));
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('discode attach <project>'));
+    logSpy.mockRestore();
   });
 });

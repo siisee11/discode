@@ -182,14 +182,14 @@ describe('container lifecycle integration', () => {
       const existingProject: ProjectState = {
         projectName: 'test-project',
         projectPath: '/test',
-        tmuxSession: 'agent-test',
+        runtimeSession: 'agent-test',
         discordChannels: { claude: 'ch-123' },
         agents: { claude: true },
         instances: {
           claude: {
             instanceId: 'claude',
             agentType: 'claude',
-            tmuxWindow: 'test-project-claude',
+            runtimeWindow: 'test-project-claude',
             channelId: 'ch-123',
             containerMode: true,
             containerId: 'existing-container-id',
@@ -241,14 +241,14 @@ describe('container lifecycle integration', () => {
       const existingProject: ProjectState = {
         projectName: 'test-project',
         projectPath: '/test',
-        tmuxSession: 'agent-test',
+        runtimeSession: 'agent-test',
         discordChannels: { claude: 'ch-123' },
         agents: { claude: true },
         instances: {
           claude: {
             instanceId: 'claude',
             agentType: 'claude',
-            tmuxWindow: 'test-project-claude',
+            runtimeWindow: 'test-project-claude',
             channelId: 'ch-123',
             // No containerMode — standard mode instance
           },

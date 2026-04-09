@@ -59,7 +59,7 @@ const mocks = vi.hoisted(() => {
         channelName: 'demo-claude',
         channelId: 'ch-1',
         agentName: 'Claude Code',
-        tmuxSession: 'agent-bridge',
+        runtimeSession: 'agent-bridge',
       }),
       stop: vi.fn().mockResolvedValue(undefined),
       start: vi.fn().mockResolvedValue(undefined),
@@ -99,6 +99,7 @@ const mocks = vi.hoisted(() => {
       activeWindowId: undefined,
       windows: [],
     }),
+    stopRuntimeWindow: vi.fn().mockResolvedValue(true),
   };
 
   const tuiCommand = vi.fn().mockResolvedValue(undefined);
@@ -157,6 +158,7 @@ vi.mock('../src/app/daemon-service.js', () => ({
 vi.mock('../src/cli/common/runtime-api.js', () => ({
   runtimeApiRequest: mocks.runtimeApi.runtimeApiRequest,
   listRuntimeWindows: mocks.runtimeApi.listRuntimeWindows,
+  stopRuntimeWindow: mocks.runtimeApi.stopRuntimeWindow,
 }));
 
 vi.mock('../src/cli/commands/tui.js', () => ({
@@ -260,39 +262,37 @@ describe('CLI flow safety (stage 1)', () => {
       { claude: true },
       undefined,
       18470,
-      { instanceId: 'claude', skipRuntimeStart: false },
+      { instanceId: 'claude', skipRuntimeStart: true },
     );
     expect(bridge.stop).toHaveBeenCalledOnce();
   });
 
-  it('attach: attaches to requested instance window', async () => {
+  it('attach: focuses the requested runtime window and opens the runtime UI entrypoint', async () => {
     const mod = await import('../bin/discode.ts');
     const project = {
       projectName: 'demo',
       projectPath: '/work/demo',
-      tmuxSession: 'agent-bridge',
+      runtimeSession: 'agent-bridge',
       createdAt: new Date(),
       lastActive: new Date(),
       agents: { claude: true },
       discordChannels: { claude: 'ch-1' },
       instances: {
-        claude: { instanceId: 'claude', agentType: 'claude', tmuxWindow: 'demo-claude', channelId: 'ch-1' },
-        'claude-2': { instanceId: 'claude-2', agentType: 'claude', tmuxWindow: 'demo-claude-2', channelId: 'ch-2' },
+        claude: { instanceId: 'claude', agentType: 'claude', runtimeWindow: 'demo-claude', channelId: 'ch-1' },
+        'claude-2': { instanceId: 'claude-2', agentType: 'claude', runtimeWindow: 'demo-claude-2', channelId: 'ch-2' },
       },
     };
     mocks.stateManager.getProject.mockReturnValue(project);
 
-    mod.attachCommand('demo', { instance: 'claude-2' });
+    await mod.attachCommand('demo', { instance: 'claude-2' });
 
-    const attachOrSwitchCall = mocks.execSync.mock.calls.find(([command]) =>
-      typeof command === 'string' &&
-      (
-        command.includes("tmux attach-session -t 'agent-bridge:demo-claude-2'") ||
-        command.includes("tmux switch-client -t 'agent-bridge:demo-claude-2'")
-      )
+    expect(mocks.runtimeApi.runtimeApiRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: '/runtime/focus',
+        payload: { windowId: 'agent-bridge:demo-claude-2' },
+      }),
     );
-    expect(attachOrSwitchCall).toBeTruthy();
-    expect(attachOrSwitchCall?.[1]).toEqual(expect.objectContaining({ stdio: 'inherit' }));
+    expect(mocks.tuiCommand).toHaveBeenCalledOnce();
   });
 
   it('stop: stops one instance and keeps remaining instances in state', async () => {
@@ -300,23 +300,23 @@ describe('CLI flow safety (stage 1)', () => {
     const project = {
       projectName: 'demo',
       projectPath: '/work/demo',
-      tmuxSession: 'agent-bridge',
+      runtimeSession: 'agent-bridge',
       createdAt: new Date(),
       lastActive: new Date(),
       agents: { claude: true },
       discordChannels: { claude: 'ch-1' },
       instances: {
-        claude: { instanceId: 'claude', agentType: 'claude', tmuxWindow: 'demo-claude', channelId: 'ch-1' },
-        'claude-2': { instanceId: 'claude-2', agentType: 'claude', tmuxWindow: 'demo-claude-2', channelId: 'ch-2' },
+        claude: { instanceId: 'claude', agentType: 'claude', runtimeWindow: 'demo-claude', channelId: 'ch-1' },
+        'claude-2': { instanceId: 'claude-2', agentType: 'claude', runtimeWindow: 'demo-claude-2', channelId: 'ch-2' },
       },
     };
     mocks.stateManager.getProject.mockReturnValue(project);
 
     await mod.stopCommand('demo', { instance: 'claude-2', keepChannel: true });
 
-    expect(mocks.execSync).toHaveBeenCalledWith(
-      expect.stringContaining("tmux kill-window -t 'agent-bridge:demo-claude-2'"),
-      expect.objectContaining({ stdio: 'ignore' }),
+    expect(mocks.runtimeApi.stopRuntimeWindow).toHaveBeenCalledWith(
+      18470,
+      'agent-bridge:demo-claude-2',
     );
     expect(mocks.stateManager.setProject).toHaveBeenCalledOnce();
     expect(mocks.stateManager.removeProject).not.toHaveBeenCalled();
@@ -352,18 +352,18 @@ describe('CLI flow safety (stage 1)', () => {
     logSpy.mockRestore();
   });
 
-  it('attach (pty-rust): retries runtime focus before opening tui', async () => {
+  it('attach (pty-rust): retries runtime focus before opening the runtime UI entrypoint', async () => {
     const mod = await import('../bin/discode.ts');
     const project = {
       projectName: 'demo',
       projectPath: '/work/demo',
-      tmuxSession: 'agent-bridge',
+      runtimeSession: 'agent-bridge',
       createdAt: new Date(),
       lastActive: new Date(),
       agents: { claude: true },
       discordChannels: { claude: 'ch-1' },
       instances: {
-        claude: { instanceId: 'claude', agentType: 'claude', tmuxWindow: 'demo-claude', channelId: 'ch-1' },
+        claude: { instanceId: 'claude', agentType: 'claude', runtimeWindow: 'demo-claude', channelId: 'ch-1' },
       },
     };
     mocks.config.runtimeMode = 'pty-rust';
@@ -398,13 +398,13 @@ describe('CLI flow safety (stage 1)', () => {
     const project = {
       projectName: 'demo',
       projectPath: '/work/demo',
-      tmuxSession: 'agent-bridge',
+      runtimeSession: 'agent-bridge',
       createdAt: new Date(),
       lastActive: new Date(),
       agents: { claude: true },
       discordChannels: { claude: 'ch-1' },
       instances: {
-        claude: { instanceId: 'claude', agentType: 'claude', tmuxWindow: 'demo-claude', channelId: 'ch-1' },
+        claude: { instanceId: 'claude', agentType: 'claude', runtimeWindow: 'demo-claude', channelId: 'ch-1' },
       },
     };
     const oldNative = process.env.DISCODE_NATIVE_ATTACH;
@@ -426,13 +426,13 @@ describe('CLI flow safety (stage 1)', () => {
     const project = {
       projectName: 'demo',
       projectPath: '/work/demo',
-      tmuxSession: 'agent-bridge',
+      runtimeSession: 'agent-bridge',
       createdAt: new Date(),
       lastActive: new Date(),
       agents: { claude: true },
       discordChannels: { claude: 'ch-1' },
       instances: {
-        claude: { instanceId: 'claude', agentType: 'claude', tmuxWindow: 'demo-claude', channelId: 'ch-1' },
+        claude: { instanceId: 'claude', agentType: 'claude', runtimeWindow: 'demo-claude', channelId: 'ch-1' },
       },
     };
     const oldNative = process.env.DISCODE_NATIVE_ATTACH;
@@ -462,13 +462,13 @@ describe('CLI flow safety (stage 1)', () => {
     const project = {
       projectName: 'demo',
       projectPath: '/work/demo',
-      tmuxSession: 'agent-bridge',
+      runtimeSession: 'agent-bridge',
       createdAt: new Date(),
       lastActive: new Date(),
       agents: { claude: true },
       discordChannels: { claude: 'ch-1' },
       instances: {
-        claude: { instanceId: 'claude', agentType: 'claude', tmuxWindow: 'demo-claude', channelId: 'ch-1' },
+        claude: { instanceId: 'claude', agentType: 'claude', runtimeWindow: 'demo-claude', channelId: 'ch-1' },
       },
     };
     const oldRepo = process.env.DISCODE_REPO;
@@ -502,7 +502,7 @@ describe('CLI flow safety (stage 1)', () => {
       await mod.attachCommand('demo', { instance: 'claude' });
 
       expect(mocks.spawnSync).toHaveBeenCalledWith(
-        binaryPath,
+        expect.stringContaining('discode-runtime-client'),
         ['--socket', expect.any(String), '--window-id', 'agent-bridge:demo-claude', '--daemon-port', '18470'],
         { stdio: 'inherit' },
       );
@@ -518,17 +518,17 @@ describe('CLI flow safety (stage 1)', () => {
     }
   });
 
-  it('attach (pty-rust): auto mode falls back to tui when no native binary is discoverable', async () => {
+  it('attach (pty-rust): delegates to the runtime UI entrypoint when no native binary is discoverable', async () => {
     const project = {
       projectName: 'demo',
       projectPath: '/work/demo',
-      tmuxSession: 'agent-bridge',
+      runtimeSession: 'agent-bridge',
       createdAt: new Date(),
       lastActive: new Date(),
       agents: { claude: true },
       discordChannels: { claude: 'ch-1' },
       instances: {
-        claude: { instanceId: 'claude', agentType: 'claude', tmuxWindow: 'demo-claude', channelId: 'ch-1' },
+        claude: { instanceId: 'claude', agentType: 'claude', runtimeWindow: 'demo-claude', channelId: 'ch-1' },
       },
     };
     const oldNative = process.env.DISCODE_NATIVE_ATTACH;
@@ -561,18 +561,18 @@ describe('CLI flow safety (stage 1)', () => {
     }
   });
 
-  it('attach (pty-rust): falls back to tui when native attach exits non-zero', async () => {
+  it('attach (pty-rust): delegates to the runtime UI entrypoint when native attach exits non-zero', async () => {
     const mod = await import('../bin/discode.ts');
     const project = {
       projectName: 'demo',
       projectPath: '/work/demo',
-      tmuxSession: 'agent-bridge',
+      runtimeSession: 'agent-bridge',
       createdAt: new Date(),
       lastActive: new Date(),
       agents: { claude: true },
       discordChannels: { claude: 'ch-1' },
       instances: {
-        claude: { instanceId: 'claude', agentType: 'claude', tmuxWindow: 'demo-claude', channelId: 'ch-1' },
+        claude: { instanceId: 'claude', agentType: 'claude', runtimeWindow: 'demo-claude', channelId: 'ch-1' },
       },
     };
     const oldNative = process.env.DISCODE_NATIVE_ATTACH;

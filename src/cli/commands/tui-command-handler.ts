@@ -3,7 +3,6 @@ import { config, validateConfig } from '../../config/index.js';
 import { stateManager } from '../../state/index.js';
 import { agentRegistry } from '../../agents/index.js';
 import { listProjectInstances } from '../../state/instances.js';
-import { TmuxManager } from '../../tmux/manager.js';
 import type { BridgeConfig } from '../../types/index.js';
 import type { TmuxCliOptions } from '../common/types.js';
 import { parseNewCommand, parseOnboardCommand } from '../common/tui-command-parsers.js';
@@ -60,8 +59,8 @@ export async function handleTuiCommand(
   }
 
   if (normalizedCommand === '/help') {
-    append('Commands: /new [name] [agent] [--path dir] [--instance id] [--attach], /onboard [options], /list, /projects, /config [keepChannel [on|off|toggle] | defaultAgent [agent|auto] | defaultChannel [channelId|auto] | runtimeMode [tmux|pty-rust|toggle]], /help, /exit');
-    append('Onboard options: --platform [discord|slack], --runtime-mode [tmux|pty-rust], --token, --slack-bot-token, --slack-app-token, --default-agent [name|auto], --telemetry [on|off], --opencode-permission [allow|default]');
+    append('Commands: /new [name] [agent] [--path dir] [--instance id] [--attach], /onboard [options], /list, /projects, /config [keepChannel [on|off|toggle] | defaultAgent [agent|auto] | defaultChannel [channelId|auto] | runtimeMode [pty-rust]], /help, /exit');
+    append('Onboard options: --platform [discord|slack], --runtime-mode [pty-rust], --token, --slack-bot-token, --slack-app-token, --default-agent [name|auto], --telemetry [on|off], --opencode-permission [allow|default]');
     return 'handled';
   }
 
@@ -125,7 +124,7 @@ export async function handleTuiCommand(
 async function handleOnboard(command: string, append: (line: string) => void): Promise<'handled'> {
   const parsed = parseOnboardCommand(command);
   if (parsed.showUsage) {
-    append('Usage: /onboard [discord|slack] [--platform discord|slack] [--runtime-mode tmux|pty-rust]');
+    append('Usage: /onboard [discord|slack] [--platform discord|slack] [--runtime-mode pty-rust]');
     append('       [--token TOKEN] [--slack-bot-token TOKEN] [--slack-app-token TOKEN]');
     append('       [--default-agent claude|gemini|opencode|auto] [--telemetry on|off]');
     append('       [--opencode-permission allow|default]');
@@ -169,20 +168,7 @@ async function handleList(append: (line: string) => void, deps: TuiCommandDeps):
     return 'handled';
   }
 
-  const tmux = new TmuxManager(config.tmux.sessionPrefix);
-  const sessions = new Set(
-    stateManager
-      .listProjects()
-      .map((project) => project.tmuxSession)
-      .filter((name) => tmux.sessionExistsFull(name)),
-  );
-  if (sessions.size === 0) {
-    append('No running sessions.');
-    return 'handled';
-  }
-  [...sessions].sort((a, b) => a.localeCompare(b)).forEach((session) => {
-    append(`[session] ${session}`);
-  });
+  append('No running sessions.');
   return 'handled';
 }
 

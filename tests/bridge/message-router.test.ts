@@ -11,7 +11,7 @@ vi.mock('../../src/state/instances.js', () => ({
   getProjectInstance: vi.fn(),
   normalizeProjectState: vi.fn((p: any) => ({
     ...p,
-    tmuxSession: p.tmuxSession || 'test-session',
+    runtimeSession: p.runtimeSession || 'test-session',
     instances: p.instances || {},
   })),
 }));
@@ -51,7 +51,7 @@ function createMockDeps(): BridgeMessageRouterDeps {
     stateManager: {
       getProject: vi.fn().mockReturnValue({
         projectPath: '/tmp/project',
-        tmuxSession: 'test-session',
+        runtimeSession: 'test-session',
         instances: {},
       }),
       updateLastActive: vi.fn(),
@@ -72,8 +72,8 @@ function setupInstanceResolution() {
   (findProjectInstanceByChannel as any).mockReturnValue({
     agentType: 'claude',
     instanceId: 'claude',
-    tmuxWindow: 'claude',
-    runtimeType: 'tmux',
+    runtimeWindow: 'claude',
+    runtimeType: 'pty-rust',
   });
   (getPrimaryInstanceForAgent as any).mockReturnValue(undefined);
 }
@@ -224,7 +224,7 @@ describe('BridgeMessageRouter', () => {
     (findProjectInstanceByChannel as any).mockReturnValue({
       agentType: 'claude',
       instanceId: 'claude',
-      tmuxWindow: 'claude',
+      runtimeWindow: 'claude',
       runtimeType: 'sdk',
     });
     const mockRunner = { abort: vi.fn(), submitMessage: vi.fn() };
@@ -247,7 +247,7 @@ describe('BridgeMessageRouter', () => {
     (findProjectInstanceByChannel as any).mockReturnValue({
       agentType: 'claude',
       instanceId: 'claude',
-      tmuxWindow: 'claude',
+      runtimeWindow: 'claude',
       runtimeType: 'sdk',
     });
     const mockRunner = { submitMessage: vi.fn().mockResolvedValue(undefined) };
@@ -262,7 +262,7 @@ describe('BridgeMessageRouter', () => {
     (findProjectInstanceByChannel as any).mockReturnValue({
       agentType: 'claude',
       instanceId: 'claude',
-      tmuxWindow: 'claude',
+      runtimeWindow: 'claude',
       runtimeType: 'sdk',
     });
     deps.getSdkRunner = vi.fn().mockReturnValue(undefined);

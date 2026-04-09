@@ -53,14 +53,14 @@ function createProject() {
   return normalizeProjectState({
     projectName: 'myapp',
     projectPath: '/home/user/myapp',
-    tmuxSession: 'bridge',
+    runtimeSession: 'bridge',
     discordChannels: { claude: 'ch-1' },
     agents: { claude: true },
     instances: {
       claude: {
         instanceId: 'claude',
         agentType: 'claude',
-        tmuxWindow: 'myapp-claude',
+        runtimeWindow: 'myapp-claude',
         channelId: 'ch-1',
       },
     },

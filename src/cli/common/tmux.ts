@@ -6,6 +6,7 @@ import type { BridgeConfig } from '../../types/index.js';
 import { TmuxManager } from '../../tmux/manager.js';
 import { stateManager, type ProjectState } from '../../state/index.js';
 import {
+  getProjectRuntimeSession,
   listProjectAgentTypes,
   listProjectInstances,
   normalizeProjectState,
@@ -116,10 +117,17 @@ export function pruneStaleProjects(tmux: TmuxManager, tmuxConfig: BridgeConfig['
       continue;
     }
 
-    const sessionUp = tmux.sessionExistsFull(project.tmuxSession);
+    const sessionName = getProjectRuntimeSession(project);
+    if (!sessionName) {
+      stateManager.removeProject(project.projectName);
+      removed.push(project.projectName);
+      continue;
+    }
+
+    const sessionUp = tmux.sessionExistsFull(sessionName);
     const hasLiveWindow = sessionUp && instances.some((instance) => {
       const windowName = resolveProjectWindowName(project, instance.agentType, tmuxConfig, instance.instanceId);
-      return tmux.windowExists(project.tmuxSession, windowName);
+      return tmux.windowExists(sessionName, windowName);
     });
     if (hasLiveWindow) continue;
 

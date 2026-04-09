@@ -55,20 +55,20 @@ function createMultiInstanceProject() {
   return normalizeProjectState({
     projectName: 'myapp',
     projectPath: '/home/user/myapp',
-    tmuxSession: 'bridge',
+    runtimeSession: 'bridge',
     discordChannels: { claude: 'ch-primary', 'claude-2': 'ch-secondary' },
     agents: { claude: true },
     instances: {
       claude: {
         instanceId: 'claude',
         agentType: 'claude',
-        tmuxWindow: 'myapp-claude',
+        runtimeWindow: 'myapp-claude',
         channelId: 'ch-primary',
       },
       'claude-2': {
         instanceId: 'claude-2',
         agentType: 'claude',
-        tmuxWindow: 'myapp-claude-2',
+        runtimeWindow: 'myapp-claude-2',
         channelId: 'ch-secondary',
       },
     },
@@ -81,14 +81,14 @@ function createMultiInstanceContainerProject() {
   return normalizeProjectState({
     projectName: 'myapp',
     projectPath: '/home/user/myapp',
-    tmuxSession: 'bridge',
+    runtimeSession: 'bridge',
     discordChannels: { claude: 'ch-primary', 'claude-2': 'ch-secondary' },
     agents: { claude: true },
     instances: {
       claude: {
         instanceId: 'claude',
         agentType: 'claude',
-        tmuxWindow: 'myapp-claude',
+        runtimeWindow: 'myapp-claude',
         channelId: 'ch-primary',
         containerMode: true,
         containerId: 'container-aaa',
@@ -97,7 +97,7 @@ function createMultiInstanceContainerProject() {
       'claude-2': {
         instanceId: 'claude-2',
         agentType: 'claude',
-        tmuxWindow: 'myapp-claude-2',
+        runtimeWindow: 'myapp-claude-2',
         channelId: 'ch-secondary',
         containerMode: true,
         containerId: 'container-bbb',

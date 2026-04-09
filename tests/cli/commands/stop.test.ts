@@ -36,9 +36,6 @@ const mocks = vi.hoisted(() => {
   const ContainerSync = vi.fn().mockImplementation(function MockSync() {
     (this as any).finalSync = vi.fn();
   });
-
-  const execSync = vi.fn();
-
   return {
     stateManager,
     config,
@@ -52,7 +49,6 @@ const mocks = vi.hoisted(() => {
     stopContainer,
     removeContainer,
     ContainerSync,
-    execSync,
   };
 });
 
@@ -75,6 +71,7 @@ vi.mock('../../../src/app/project-service.js', () => ({
 }));
 
 vi.mock('../../../src/state/instances.js', () => ({
+  getProjectRuntimeSession: vi.fn((project: any) => project.runtimeSession || project.runtimeSession),
   listProjectInstances: mocks.listProjectInstances,
   getProjectInstance: mocks.getProjectInstance,
 }));
@@ -95,18 +92,12 @@ vi.mock('../../../src/container/sync.js', () => ({
 vi.mock('../../../src/cli/common/tmux.js', () => ({
   applyTmuxCliOverrides: vi.fn((_config: any, _options: any) => mocks.config),
   cleanupStaleDiscodeTuiProcesses: vi.fn().mockReturnValue(0),
-  escapeShellArg: vi.fn((s: string) => `'${s}'`),
   resolveProjectWindowName: vi.fn().mockReturnValue('demo-claude'),
-  terminateTmuxPaneProcesses: vi.fn().mockResolvedValue(0),
-}));
-
-vi.mock('child_process', () => ({
-  execSync: mocks.execSync,
 }));
 
 function makeProject(overrides?: any) {
   return {
-    tmuxSession: 'bridge',
+    runtimeSession: 'bridge',
     projectPath: '/test/project',
     ...overrides,
   };
@@ -271,93 +262,6 @@ describe('stopCommand — keepChannelOnStop config (pty bulk project stop)', () 
     expect(findLogCall(consoleSpy, 'Channels preserved')).toBeDefined();
   });
 });
-
-describe('stopCommand — keepChannelOnStop config (tmux single instance)', () => {
-  let stopCommand: typeof import('../../../src/cli/commands/stop.js').stopCommand;
-  let consoleSpy: ReturnType<typeof vi.spyOn>;
-
-  beforeEach(async () => {
-    vi.clearAllMocks();
-    mocks.config.runtimeMode = 'tmux';
-    mocks.removeInstanceFromProjectState.mockReturnValue({ removedProject: true });
-    consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-    vi.spyOn(console, 'error').mockImplementation(() => {});
-    const mod = await import('../../../src/cli/commands/stop.js');
-    stopCommand = mod.stopCommand;
-  });
-
-  it('deletes channel by default in tmux mode', async () => {
-    const instance = makeInstance();
-    mocks.stateManager.getProject.mockReturnValue(makeProject());
-    mocks.getProjectInstance.mockReturnValue(instance);
-    mocks.getConfigValue.mockReturnValue(undefined);
-    mocks.deleteChannels.mockResolvedValue(['ch-123']);
-
-    await stopCommand('demo', { instance: 'claude-1' });
-
-    expect(mocks.deleteChannels).toHaveBeenCalledWith(['ch-123']);
-  });
-
-  it('preserves channel when keepChannelOnStop=true in tmux mode', async () => {
-    const instance = makeInstance();
-    mocks.stateManager.getProject.mockReturnValue(makeProject());
-    mocks.getProjectInstance.mockReturnValue(instance);
-    mocks.getConfigValue.mockReturnValue(true);
-
-    await stopCommand('demo', { instance: 'claude-1' });
-
-    expect(mocks.deleteChannels).not.toHaveBeenCalled();
-    expect(findLogCall(consoleSpy, 'Channel preserved')).toBeDefined();
-  });
-});
-
-describe('stopCommand — keepChannelOnStop config (tmux bulk project stop)', () => {
-  let stopCommand: typeof import('../../../src/cli/commands/stop.js').stopCommand;
-  let consoleSpy: ReturnType<typeof vi.spyOn>;
-
-  beforeEach(async () => {
-    vi.clearAllMocks();
-    mocks.config.runtimeMode = 'tmux';
-    mocks.removeProjectState.mockReturnValue(undefined);
-    consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-    vi.spyOn(console, 'error').mockImplementation(() => {});
-    const mod = await import('../../../src/cli/commands/stop.js');
-    stopCommand = mod.stopCommand;
-  });
-
-  it('deletes all channels in tmux bulk stop by default', async () => {
-    const instances = [
-      makeInstance({ instanceId: 'claude-1', channelId: 'ch-1' }),
-      makeInstance({ instanceId: 'claude-2', channelId: 'ch-2' }),
-    ];
-    const project = makeProject({ tmuxSession: 'my-project' });
-    mocks.stateManager.getProject.mockReturnValue(project);
-    mocks.listProjectInstances.mockReturnValue(instances);
-    mocks.getConfigValue.mockReturnValue(undefined);
-    mocks.deleteChannels.mockResolvedValue(['ch-1', 'ch-2']);
-
-    await stopCommand('demo', {});
-
-    expect(mocks.deleteChannels).toHaveBeenCalledWith(['ch-1', 'ch-2']);
-  });
-
-  it('preserves all channels when keepChannelOnStop=true in tmux bulk stop', async () => {
-    const instances = [
-      makeInstance({ instanceId: 'claude-1', channelId: 'ch-1' }),
-      makeInstance({ instanceId: 'claude-2', channelId: 'ch-2' }),
-    ];
-    const project = makeProject({ tmuxSession: 'my-project' });
-    mocks.stateManager.getProject.mockReturnValue(project);
-    mocks.listProjectInstances.mockReturnValue(instances);
-    mocks.getConfigValue.mockReturnValue(true);
-
-    await stopCommand('demo', {});
-
-    expect(mocks.deleteChannels).not.toHaveBeenCalled();
-    expect(findLogCall(consoleSpy, 'Channels preserved')).toBeDefined();
-  });
-});
-
 describe('stopCommand — container sync warning', () => {
   let stopCommand: typeof import('../../../src/cli/commands/stop.js').stopCommand;
   let consoleSpy: ReturnType<typeof vi.spyOn>;

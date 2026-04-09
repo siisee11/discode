@@ -20,7 +20,7 @@ vi.mock('../../../src/config/index.js', () => ({
     tmux: { sessionPrefix: 'discode-' },
     discord: {},
     defaultAgentCli: 'claude',
-    runtimeMode: 'tmux',
+    runtimeMode: 'pty-rust',
   },
   validateConfig: mockValidateConfig,
 }));

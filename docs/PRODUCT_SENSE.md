@@ -9,7 +9,7 @@ Discode's current product shape:
 - local-first remote control for AI coding agents
 - chat-driven collaboration through Discord or Slack
 - persistent local sessions managed by a single daemon
-- explicit runtime choices between `tmux` and `pty-rust`
+- Rust-only local runtime (`pty-rust`) with the Rust native attach client as the only local terminal UI
 
 Feature-level specs live in [`product-specs/index.md`](product-specs/index.md).
 

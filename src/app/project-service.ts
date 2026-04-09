@@ -3,14 +3,13 @@ import { AgentBridge } from '../index.js';
 import { stateManager, type ProjectState } from '../state/index.js';
 import type { BridgeConfig, ProjectInstanceState } from '../types/index.js';
 import { agentRegistry } from '../agents/index.js';
-import { normalizeProjectState } from '../state/instances.js';
+import { getProjectRuntimeSession, normalizeProjectState } from '../state/instances.js';
 import { buildAgentLaunchEnv, buildExportPrefix, readHookToken } from '../policy/agent-launch.js';
 import { installAgentIntegration } from '../policy/agent-integration.js';
 import { resolveProjectWindowName } from '../policy/window-naming.js';
 import type { AgentRuntime } from '../runtime/interface.js';
-import { TmuxRuntime } from '../runtime/tmux-runtime.js';
+import { createRuntimeForMode } from '../runtime/factory.js';
 import { containerExists, buildDockerStartCommand } from '../container/index.js';
-import { isPtyRuntimeMode } from '../runtime/mode.js';
 
 export async function setupProjectInstance(params: {
   config: BridgeConfig;
@@ -39,7 +38,7 @@ export async function setupProjectInstance(params: {
       params.port,
       {
         instanceId: params.instanceId,
-        skipRuntimeStart: isPtyRuntimeMode(params.config.runtimeMode || 'tmux'),
+        skipRuntimeStart: true,
       },
     );
 
@@ -64,55 +63,53 @@ export async function setupProjectInstance(params: {
       // daemon will pick up on next restart
     }
 
-    if (isPtyRuntimeMode(params.config.runtimeMode || 'tmux')) {
-      try {
-        const ensureOnce = async () => {
-          return await new Promise<number>((resolveDone) => {
-            const payload = JSON.stringify({
-              projectName: params.projectName,
-              instanceId: params.instanceId,
-              permissionAllow: params.config.opencode?.permissionMode === 'allow',
-            });
-            const req = httpRequest(
-              {
-                hostname: '127.0.0.1',
-                port: params.port,
-                path: '/runtime/ensure',
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Content-Length': Buffer.byteLength(payload),
-                  ...(hookToken ? { Authorization: `Bearer ${hookToken}` } : {}),
-                },
-              },
-              (res) => resolveDone(res.statusCode || 0),
-            );
-            req.on('error', () => resolveDone(0));
-            req.setTimeout(2000, () => {
-              req.destroy();
-              resolveDone(0);
-            });
-            req.write(payload);
-            req.end();
+    try {
+      const ensureOnce = async () => {
+        return await new Promise<number>((resolveDone) => {
+          const payload = JSON.stringify({
+            projectName: params.projectName,
+            instanceId: params.instanceId,
+            permissionAllow: params.config.opencode?.permissionMode === 'allow',
           });
-        };
+          const req = httpRequest(
+            {
+              hostname: '127.0.0.1',
+              port: params.port,
+              path: '/runtime/ensure',
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(payload),
+                ...(hookToken ? { Authorization: `Bearer ${hookToken}` } : {}),
+              },
+            },
+            (res) => resolveDone(res.statusCode || 0),
+          );
+          req.on('error', () => resolveDone(0));
+          req.setTimeout(2000, () => {
+            req.destroy();
+            resolveDone(0);
+          });
+          req.write(payload);
+          req.end();
+        });
+      };
 
-        let ensured = false;
-        for (let attempt = 0; attempt < 6; attempt++) {
-          const status = await ensureOnce();
-          if (status >= 200 && status < 300) {
-            ensured = true;
-            break;
-          }
-          await new Promise((resolveDelay) => setTimeout(resolveDelay, 120));
+      let ensured = false;
+      for (let attempt = 0; attempt < 6; attempt++) {
+        const status = await ensureOnce();
+        if (status >= 200 && status < 300) {
+          ensured = true;
+          break;
         }
-
-        if (!ensured) {
-          console.warn(`⚠️ Could not ensure runtime window for ${params.projectName}#${params.instanceId}`);
-        }
-      } catch {
-        // non-critical; attach fallback remains available
+        await new Promise((resolveDelay) => setTimeout(resolveDelay, 120));
       }
+
+      if (!ensured) {
+        console.warn(`⚠️ Could not ensure runtime window for ${params.projectName}#${params.instanceId}`);
+      }
+    } catch {
+      // non-critical; attach fallback remains available
     }
 
     return {
@@ -142,8 +139,11 @@ export async function resumeProjectInstance(params: {
   const infoMessages: string[] = [];
   const warningMessages: string[] = [];
 
-  const runtime = params.runtime || TmuxRuntime.create(params.config.tmux.sessionPrefix);
-  const fullSessionName = params.project.tmuxSession;
+  const runtime = params.runtime || createRuntimeForMode(params.config.runtimeMode, params.config.tmux.sessionPrefix);
+  const fullSessionName = getProjectRuntimeSession(params.project);
+  if (!fullSessionName) {
+    throw new Error(`Project '${params.projectName}' is missing a runtime session.`);
+  }
   const prefix = params.config.tmux.sessionPrefix;
   if (fullSessionName.startsWith(prefix)) {
     runtime.getOrCreateSession(fullSessionName.slice(prefix.length));

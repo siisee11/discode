@@ -112,7 +112,7 @@ describe('hook server error resilience', () => {
   const project = {
     projectName: 'test',
     projectPath: '/tmp/test',
-    tmuxSession: 'bridge',
+    runtimeSession: 'bridge',
     agents: { claude: true },
     discordChannels: { claude: 'ch-1' },
     instances: {

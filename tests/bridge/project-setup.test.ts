@@ -166,7 +166,7 @@ describe('setupProject', () => {
     vi.mocked(deps.stateManager.getProject).mockReturnValue({
       projectName: 'my-proj',
       projectPath: '/tmp/proj',
-      tmuxSession: 'discode-bridge',
+      runtimeSession: 'discode-bridge',
       instances: { 'opencode-1': { instanceId: 'opencode-1', agentType: 'opencode' } },
       agents: {},
       discordChannels: {},
@@ -216,7 +216,7 @@ describe('setupProject', () => {
     // Return values
     expect(result.channelId).toBe('ch-1');
     expect(result.agentName).toBe('OpenCode');
-    expect(result.tmuxSession).toBe('discode-bridge');
+    expect(result.runtimeSession).toBe('discode-bridge');
   });
 
   // ── Container setup ─────────────────────────────────────────────
@@ -322,12 +322,12 @@ describe('setupProject', () => {
     const existingState = {
       projectName: 'my-proj',
       projectPath: '/tmp/proj',
-      tmuxSession: 'discode-bridge',
+      runtimeSession: 'discode-bridge',
       instances: {
         'opencode-1': {
           instanceId: 'opencode-1',
           agentType: 'opencode',
-          tmuxWindow: 'my-proj-opencode-opencode-1',
+          runtimeWindow: 'my-proj-opencode-opencode-1',
           channelId: 'ch-existing',
         },
       },

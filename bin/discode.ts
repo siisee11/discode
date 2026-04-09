@@ -16,7 +16,6 @@ import { attachCommand } from '../src/cli/commands/attach.js';
 import { stopCommand } from '../src/cli/commands/stop.js';
 import { tuiCommand } from '../src/cli/commands/tui.js';
 import { onboardCommand } from '../src/cli/commands/onboard.js';
-import { onboardWizardCommand } from '../src/cli/commands/onboard-wizard.js';
 import { startCommand } from '../src/cli/commands/start.js';
 import { configCommand } from '../src/cli/commands/config.js';
 import { statusCommand } from '../src/cli/commands/status.js';
@@ -239,7 +238,7 @@ export async function runCli(rawArgs: string[] = hideBin(process.argv)): Promise
     .strict()
     .command(
       ['$0', 'tui'],
-      'Interactive terminal UI (supports /new, /onboard, /config)',
+      'Open the active Rust runtime UI',
       (y: Argv) => addTmuxOptions(y),
       withCommandTelemetry('tui', async (argv: any) =>
         tuiCommand({
@@ -248,48 +247,21 @@ export async function runCli(rawArgs: string[] = hideBin(process.argv)): Promise
     )
     .command(
       'onboard',
-      'Full-screen onboarding wizard',
+      'Configure discode onboarding',
       (y: Argv) => y
         .option('platform', { type: 'string', choices: ['discord', 'slack'], describe: 'Messaging platform to use' })
-        .option('runtime-mode', { type: 'string', describe: 'Runtime backend to use (tmux|pty-rust)' })
+        .option('runtime-mode', { type: 'string', describe: 'Runtime backend to use (pty-rust only)' })
         .option('token', { alias: 't', type: 'string', describe: 'Discord bot token (pre-fill value)' })
         .option('slack-bot-token', { type: 'string', describe: 'Slack bot token (xoxb-...)' })
-        .option('slack-app-token', { type: 'string', describe: 'Slack app-level token (xapp-...)' })
-        .option('no-tui', { type: 'boolean', default: false, describe: 'Run legacy non-TUI onboarding flow' }),
-      withCommandTelemetry('onboard', async (argv: any) => {
-        if (!isInteractiveShell() || argv.noTui) {
-          await onboardCommand({
-            platform: argv.platform,
-            runtimeMode: argv.runtimeMode,
-            token: argv.token,
-            slackBotToken: argv.slackBotToken,
-            slackAppToken: argv.slackAppToken,
-          });
-          return;
-        }
-
-        const result = await onboardWizardCommand({
+        .option('slack-app-token', { type: 'string', describe: 'Slack app-level token (xapp-...)' }),
+      withCommandTelemetry('onboard', async (argv: any) =>
+        onboardCommand({
           platform: argv.platform,
           runtimeMode: argv.runtimeMode,
           token: argv.token,
           slackBotToken: argv.slackBotToken,
           slackAppToken: argv.slackAppToken,
-        });
-        if (!result) return;
-
-        await onboardCommand({
-          platform: result.platform,
-          runtimeMode: result.runtimeMode,
-          token: result.token,
-          slackBotToken: result.slackBotToken,
-          slackAppToken: result.slackAppToken,
-          defaultAgentCli: result.defaultAgentCli,
-          telemetryEnabled: result.telemetryEnabled,
-          opencodePermissionMode: result.opencodePermissionMode,
-          nonInteractive: true,
-          exitOnError: false,
-        });
-      })
+        }))
     )
     .command(
       'setup [token]',
@@ -305,7 +277,7 @@ export async function runCli(rawArgs: string[] = hideBin(process.argv)): Promise
       'Start the Discord bridge server',
       (y: Argv) => addTmuxOptions(y)
         .option('project', { alias: 'p', type: 'string', describe: 'Start for specific project only' })
-        .option('attach', { alias: 'a', type: 'boolean', describe: 'Attach to tmux session after starting (requires --project)' }),
+        .option('attach', { alias: 'a', type: 'boolean', describe: 'Open the runtime/TUI after starting (requires --project)' }),
       withCommandTelemetry('start', async (argv: any) =>
         startCommand({
           project: argv.project,
@@ -315,12 +287,12 @@ export async function runCli(rawArgs: string[] = hideBin(process.argv)): Promise
     )
     .command(
       'new [agent]',
-      'Quick start: launch daemon, setup project, attach tmux',
+      'Quick start: launch daemon, setup project, open the Rust runtime',
       (y: Argv) => addTmuxOptions(y)
         .positional('agent', { type: 'string', describe: 'Agent to use (claude, gemini, opencode)' })
         .option('name', { alias: 'n', type: 'string', describe: 'Project name (defaults to directory name)' })
         .option('instance', { type: 'string', describe: 'Agent instance ID (e.g. gemini-2)' })
-        .option('attach', { type: 'boolean', default: true, describe: 'Attach to tmux session after setup' })
+        .option('attach', { type: 'boolean', default: true, describe: 'Open the runtime/TUI after setup' })
         .option('container', { type: 'boolean', describe: 'Run agent inside a Docker container for isolation' }),
       withCommandTelemetry('new', async (argv: any) =>
         newCommand(argv.agent, {
@@ -341,7 +313,7 @@ export async function runCli(rawArgs: string[] = hideBin(process.argv)): Promise
         .option('port', { alias: 'p', type: 'string', describe: 'Set hook server port' })
         .option('default-agent', { type: 'string', describe: 'Set default AI CLI for `discode new`' })
         .option('platform', { type: 'string', choices: ['discord', 'slack'], describe: 'Set messaging platform' })
-        .option('runtime-mode', { type: 'string', describe: 'Set runtime backend (tmux|pty-rust)' })
+        .option('runtime-mode', { type: 'string', describe: 'Set runtime backend (pty-rust only)' })
         .option('slack-bot-token', { type: 'string', describe: 'Set Slack bot token (xoxb-...)' })
         .option('slack-app-token', { type: 'string', describe: 'Set Slack app-level token (xapp-...)' })
         .option('opencode-permission', {
@@ -392,19 +364,19 @@ export async function runCli(rawArgs: string[] = hideBin(process.argv)): Promise
     .command(
       'list',
       'List all configured projects',
-      (y: Argv) => y.option('prune', { type: 'boolean', describe: 'Remove projects whose tmux window is not running' }),
+      (y: Argv) => y.option('prune', { type: 'boolean', describe: 'Remove projects whose runtime window is not running' }),
       withCommandTelemetry('list', async (argv: any) => await listCommand({ prune: argv.prune }))
     )
     .command(
       'ls',
       false,
-      (y: Argv) => y.option('prune', { type: 'boolean', describe: 'Remove projects whose tmux window is not running' }),
+      (y: Argv) => y.option('prune', { type: 'boolean', describe: 'Remove projects whose runtime window is not running' }),
       withCommandTelemetry('ls', async (argv: any) => await listCommand({ prune: argv.prune }))
     )
     .command('agents', 'List available AI agent adapters', () => {}, withCommandTelemetry('agents', async () => agentsCommand()))
     .command(
       'attach [project]',
-      'Attach to a project tmux session',
+      'Attach to a project runtime session',
       (y: Argv) => addTmuxOptions(y)
         .positional('project', { type: 'string' })
         .option('instance', { type: 'string', describe: 'Attach specific instance ID' }),
@@ -416,11 +388,11 @@ export async function runCli(rawArgs: string[] = hideBin(process.argv)): Promise
     )
     .command(
       'stop [project]',
-      'Stop a project (kills tmux session, deletes Discord channel)',
+      'Stop a project (stops runtime window, deletes Discord channel)',
       (y: Argv) => addTmuxOptions(y)
         .positional('project', { type: 'string' })
         .option('instance', { type: 'string', describe: 'Stop only a specific instance ID' })
-        .option('keep-channel', { type: 'boolean', describe: 'Keep Discord channel (only kill tmux)' }),
+        .option('keep-channel', { type: 'boolean', describe: 'Keep Discord channel (only stop runtime)' }),
       withCommandTelemetry('stop', async (argv: any) =>
         stopCommand(argv.project, {
           keepChannel: argv.keepChannel,

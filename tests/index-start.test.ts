@@ -96,6 +96,7 @@ function createMockMessaging() {
 function createMockTmux() {
   return {
     getOrCreateSession: vi.fn().mockReturnValue('agent-test'),
+    windowExists: vi.fn().mockReturnValue(true),
     createWindow: vi.fn(),
     sendKeysToWindow: vi.fn(),
     typeKeysToWindow: vi.fn(),
@@ -154,7 +155,7 @@ describe('AgentBridge – start', () => {
     mockStateManager = createMockStateManager();
     bridge = new AgentBridge({
       messaging: mockMessaging,
-      tmux: createMockTmux(),
+      runtime: createMockTmux(),
       stateManager: mockStateManager,
       registry: createMockRegistry(),
       config: createMockConfig(),
@@ -170,7 +171,7 @@ describe('AgentBridge – start', () => {
       {
         projectName: 'test-project',
         projectPath: '/test',
-        tmuxSession: 'agent-test',
+        runtimeSession: 'agent-test',
         discordChannels: { claude: 'ch-123', cursor: 'ch-456' },
         agents: { claude: true },
         createdAt: new Date(),
@@ -200,7 +201,7 @@ describe('AgentBridge – start', () => {
       {
         projectName: 'test-project',
         projectPath: '/test',
-        tmuxSession: 'agent-test',
+        runtimeSession: 'agent-test',
         discordChannels: { claude: 'ch-123' },
         agents: { claude: true },
         createdAt: new Date(),
@@ -224,7 +225,7 @@ describe('AgentBridge – start', () => {
       {
         projectName: 'test-project',
         projectPath: '/test',
-        tmuxSession: 'agent-test',
+        runtimeSession: 'agent-test',
         discordChannels: { gemini: 'ch-123' },
         agents: { gemini: true },
         createdAt: new Date(),
@@ -247,7 +248,7 @@ describe('AgentBridge – start', () => {
     const mockTmux = createMockTmux();
     bridge = new AgentBridge({
       messaging: mockMessaging,
-      tmux: mockTmux,
+      runtime: mockTmux,
       stateManager: mockStateManager,
       registry: createMockRegistry(),
       config: createMockConfig(),
@@ -256,7 +257,7 @@ describe('AgentBridge – start', () => {
     mockStateManager.getProject.mockReturnValue({
       projectName: 'test-project',
       projectPath: '/test',
-      tmuxSession: 'agent-test',
+      runtimeSession: 'agent-test',
       discordChannels: { claude: 'ch-123' },
       agents: { claude: true },
       createdAt: new Date(),
@@ -280,7 +281,7 @@ describe('AgentBridge – start', () => {
     const mockTmux = createMockTmux();
     bridge = new AgentBridge({
       messaging: mockMessaging,
-      tmux: mockTmux,
+      runtime: mockTmux,
       stateManager: mockStateManager,
       registry: createMockRegistry(),
       config: createMockConfig(),
@@ -289,8 +290,8 @@ describe('AgentBridge – start', () => {
     mockStateManager.getProject.mockReturnValue({
       projectName: 'test-project',
       projectPath: '/test',
-      tmuxSession: 'agent-test',
-      tmuxWindows: { opencode: 'test-project-opencode' },
+      runtimeSession: 'agent-test',
+      runtimeWindows: { opencode: 'test-project-opencode' },
       discordChannels: { opencode: 'ch-123' },
       agents: { opencode: true },
       createdAt: new Date(),
@@ -305,7 +306,7 @@ describe('AgentBridge – start', () => {
     expect(mockTmux.sendEnterToWindow).toHaveBeenCalledWith('agent-test', 'test-project-opencode', 'opencode');
   });
 
-  it('shows English recovery guidance when tmux window is missing', async () => {
+  it('shows English recovery guidance when runtime window is missing', async () => {
     process.env.DISCODE_OPENCODE_SUBMIT_DELAY_MS = '0';
 
     const mockTmux = createMockTmux();
@@ -316,7 +317,7 @@ describe('AgentBridge – start', () => {
     });
     bridge = new AgentBridge({
       messaging: mockMessaging,
-      tmux: mockTmux,
+      runtime: mockTmux,
       stateManager: mockStateManager,
       registry: createMockRegistry(),
       config: createMockConfig(),
@@ -325,8 +326,8 @@ describe('AgentBridge – start', () => {
     mockStateManager.getProject.mockReturnValue({
       projectName: 'discode',
       projectPath: '/test',
-      tmuxSession: 'bridge',
-      tmuxWindows: { opencode: 'discode-opencode' },
+      runtimeSession: 'bridge',
+      runtimeWindows: { opencode: 'discode-opencode' },
       discordChannels: { opencode: 'ch-123' },
       agents: { opencode: true },
       createdAt: new Date(),
@@ -338,7 +339,7 @@ describe('AgentBridge – start', () => {
     await cb('opencode', 'hi', 'discode', 'ch-123');
 
     const lastNotice = String(mockMessaging.sendToChannel.mock.calls.at(-1)?.[1] ?? '');
-    expect(lastNotice).toContain('agent tmux window is not running');
+    expect(lastNotice).toContain('agent runtime window is not running');
     expect(lastNotice).toContain('discode new --name discode');
     expect(lastNotice).toContain('discode attach discode');
     expect(lastNotice).not.toContain("can't find window");

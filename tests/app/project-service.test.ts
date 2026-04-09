@@ -37,6 +37,7 @@ vi.mock('../../src/state/instances.js', () => ({
   normalizeProjectState: (...args: any[]) => mockNormalizeProjectState(...args),
   buildNextInstanceId: vi.fn(),
   getProjectInstance: vi.fn(),
+  getProjectRuntimeSession: vi.fn((project: any) => project.runtimeSession || project.runtimeSession),
   listProjectInstances: vi.fn(),
 }));
 
@@ -69,10 +70,8 @@ vi.mock('../../src/policy/window-naming.js', () => ({
   resolveProjectWindowName: (...args: any[]) => mockResolveProjectWindowName(...args),
 }));
 
-vi.mock('../../src/runtime/tmux-runtime.js', () => ({
-  TmuxRuntime: {
-    create: vi.fn(() => mockRuntime),
-  },
+vi.mock('../../src/runtime/factory.js', () => ({
+  createRuntimeForMode: vi.fn(() => mockRuntime),
 }));
 
 const mockContainerExists = vi.fn(() => false);
@@ -119,7 +118,7 @@ function makeProject(overrides: Partial<ProjectState> = {}): ProjectState {
   return {
     projectName: 'myproject',
     projectPath: '/tmp/myproject',
-    tmuxSession: 'discode_bridge',
+    runtimeSession: 'discode_bridge',
     agents: { claude: true },
     discordChannels: { claude: 'ch-1' },
     createdAt: new Date(),
@@ -129,7 +128,7 @@ function makeProject(overrides: Partial<ProjectState> = {}): ProjectState {
         instanceId: 'claude',
         agentType: 'claude',
         channelId: 'ch-1',
-        tmuxWindow: 'myproject-claude',
+        runtimeWindow: 'myproject-claude',
       },
     },
     ...overrides,
@@ -141,7 +140,7 @@ function makeInstance(overrides: Partial<ProjectInstanceState> = {}): ProjectIns
     instanceId: 'claude',
     agentType: 'claude',
     channelId: 'ch-1',
-    tmuxWindow: 'myproject-claude',
+    runtimeWindow: 'myproject-claude',
     ...overrides,
   };
 }
@@ -512,7 +511,7 @@ describe('resumeProjectInstance', () => {
     await resumeProjectInstance({
       config: makeConfig(),
       projectName: 'myproject',
-      project: makeProject({ tmuxSession: 'discode_myproject' }),
+      project: makeProject({ runtimeSession: 'discode_myproject' }),
       instance: makeInstance(),
       port: 18470,
       runtime: mockRuntime,
@@ -536,7 +535,7 @@ describe('resumeProjectInstance', () => {
     await resumeProjectInstance({
       config: makeConfig(),
       projectName: 'myproject',
-      project: makeProject({ tmuxSession: 'discode_bridge' }),
+      project: makeProject({ runtimeSession: 'discode_bridge' }),
       instance: makeInstance(),
       port: 18470,
       runtime: mockRuntime,
